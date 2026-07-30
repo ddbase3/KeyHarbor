@@ -50,6 +50,11 @@ final class KeyHarborAdminDisplay implements IDisplay {
 	}
 
 	private function handleHtml(): string {
+		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
+		$this->view->loadBricks('Display');
+		$translations = $this->view->getBricks('keyharbor_admin_display');
+		$translations = is_array($translations) ? $translations : [];
+
 		$error = '';
 		try {
 			$this->managementService->assertCurrentUserAdmin();
@@ -57,12 +62,15 @@ final class KeyHarborAdminDisplay implements IDisplay {
 			$error = $exception->getMessage();
 		} catch (Throwable $throwable) {
 			$this->logFailure('KeyHarbor admin display failed.', $throwable);
-			$error = 'KeyHarbor administration is currently unavailable.';
+			$error = trim((string)($translations['unavailable_error'] ?? ''));
+			if ($error === '') {
+				$error = 'KeyHarbor administration is currently unavailable.';
+			}
 		}
 
-		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
 		$this->view->setTemplate('Display/KeyHarborAdminDisplay.php');
 		$this->view->assign('error', $error);
+		$this->view->assign('translations', $translations);
 		$this->view->assign(
 			'service',
 			$this->linkTargetService->getLink([

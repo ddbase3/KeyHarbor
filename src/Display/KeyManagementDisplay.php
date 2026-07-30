@@ -53,6 +53,11 @@ final class KeyManagementDisplay implements IDisplay {
 	}
 
 	private function handleHtml(): string {
+		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
+		$this->view->loadBricks('Display');
+		$translations = $this->view->getBricks('keyharbor_management_display');
+		$translations = is_array($translations) ? $translations : [];
+
 		$error = '';
 		$profile = [];
 		$canAdmin = false;
@@ -65,13 +70,16 @@ final class KeyManagementDisplay implements IDisplay {
 			$error = $exception->getMessage();
 		} catch (Throwable $throwable) {
 			$this->logFailure('KeyHarbor user display failed.', $throwable);
-			$error = 'Credential management is currently unavailable.';
+			$error = trim((string)($translations['unavailable_error'] ?? ''));
+			if ($error === '') {
+				$error = 'Credential management is currently unavailable.';
+			}
 		}
 
-		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
 		$this->view->setTemplate('Display/KeyManagementDisplay.php');
 		$this->view->assign('error', $error);
 		$this->view->assign('profile', $profile);
+		$this->view->assign('translations', $translations);
 		$this->view->assign(
 			'service',
 			$this->linkTargetService->getLink([
