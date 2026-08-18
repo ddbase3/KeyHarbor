@@ -46,7 +46,14 @@ final class KeyHarborAdminDisplay implements IDisplay {
 	}
 
 	public function getHelp(): string {
-		return 'Review, revoke and delete revoked KeyHarbor credentials as a system administrator.';
+		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
+		$this->view->loadBricks('Display');
+		$translations = $this->view->getBricks('keyharbor_admin_display');
+		$translations = is_array($translations) ? $translations : [];
+		$help = trim((string)($translations['help'] ?? ''));
+		return $help !== ''
+			? $help
+			: 'Review, revoke and delete revoked KeyHarbor credentials as a system administrator.';
 	}
 
 	private function handleHtml(): string {
@@ -59,7 +66,10 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		try {
 			$this->managementService->assertCurrentUserAdmin();
 		} catch (CredentialManagementException $exception) {
-			$error = $exception->getMessage();
+			$error = trim((string)($translations['error_' . $exception->getReason()] ?? ''));
+			if ($error === '') {
+				$error = $exception->getMessage();
+			}
 		} catch (Throwable $throwable) {
 			$this->logFailure('KeyHarbor admin display failed.', $throwable);
 			$error = trim((string)($translations['unavailable_error'] ?? ''));

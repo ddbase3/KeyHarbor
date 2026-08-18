@@ -15,6 +15,7 @@ $t = static fn(string $key, string $fallback): string => trim((string)($translat
 	class="keyharbor-app"
 	data-keyharbor-admin
 	data-service-url="<?php echo $e($serviceUrl); ?>"
+	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 >
 	<header class="keyharbor-hero">
 		<div>

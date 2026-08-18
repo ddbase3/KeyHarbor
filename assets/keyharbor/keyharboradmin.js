@@ -6,6 +6,7 @@
 		if(!root) { return; }
 
 		const serviceUrl = root.dataset.serviceUrl || '';
+		const strings = parseJson(root.dataset.strings, {});
 		const loading = root.querySelector('[data-loading]');
 		const notice = root.querySelector('[data-notice]');
 		const summary = root.querySelector('[data-summary]');
@@ -30,9 +31,9 @@
 			const text = await response.text();
 			let data;
 			try { data = JSON.parse(text); }
-			catch(error) { throw new Error('KeyHarbor returned an invalid response.'); }
+			catch(error) { throw new Error(t('invalid_response', 'KeyHarbor returned an invalid response.')); }
 			if(!response.ok || !data || data.ok !== true) {
-				throw new Error(data && data.error ? String(data.error) : 'KeyHarbor admin request failed.');
+				throw new Error(responseError(data));
 			}
 			return data;
 		}
@@ -45,7 +46,7 @@
 				state.services = Array.isArray(response.services) ? response.services : [];
 				renderSummary();
 				renderTable();
-				if(showMessage) { setNotice('Credential list refreshed.', 'success'); }
+				if(showMessage) { setNotice(t('refreshed', 'Credential list refreshed.'), 'success'); }
 			}
 			catch(error) {
 				setNotice(errorMessage(error), 'error');
@@ -63,10 +64,10 @@
 				if(counts[credential.status] !== undefined) { counts[credential.status]++; }
 			});
 			[
-				['Total', counts.total],
-				['Active', counts.active],
-				['Expired', counts.expired],
-				['Revoked', counts.revoked]
+				[t('summary_total', 'Total'), counts.total],
+				[t('status_active', 'Active'), counts.active],
+				[t('status_expired', 'Expired'), counts.expired],
+				[t('status_revoked', 'Revoked'), counts.revoked]
 			].forEach(([label, value]) => {
 				const card = element('div', 'keyharbor-summary-card');
 				card.appendChild(textElement('strong', value));
@@ -103,16 +104,16 @@
 		function createRow(credential) {
 			const row = document.createElement('tr');
 			const credentialCell = document.createElement('td');
-			credentialCell.appendChild(textElement('strong', credential.label || 'Unnamed credential'));
+			credentialCell.appendChild(textElement('strong', credential.label || t('unnamed_credential', 'Unnamed credential')));
 			credentialCell.appendChild(document.createElement('br'));
 			credentialCell.appendChild(textElement('code', credential.public_id || ''));
 			row.appendChild(credentialCell);
 
 			const ownerCell = document.createElement('td');
 			const owner = element('div', 'keyharbor-owner');
-			owner.appendChild(textElement('strong', credential.owner_name || credential.owner_login || credential.owner_user_id || 'Unknown'));
+			owner.appendChild(textElement('strong', credential.owner_name || credential.owner_login || credential.owner_user_id || t('unknown', 'Unknown')));
 			owner.appendChild(textElement('small', (credential.owner_login || '') + ' · ID ' + (credential.owner_user_id || '')));
-			owner.appendChild(textElement('small', credential.notification_address || 'No notification address'));
+			owner.appendChild(textElement('small', credential.notification_address || t('no_notification_address', 'No notification address')));
 			ownerCell.appendChild(owner);
 			row.appendChild(ownerCell);
 
@@ -131,11 +132,11 @@
 			servicesCell.appendChild(chips);
 			row.appendChild(servicesCell);
 
-			row.appendChild(textElement('td', credential.expires_at ? formatDate(credential.expires_at) : 'Permanent'));
+			row.appendChild(textElement('td', credential.expires_at ? formatDate(credential.expires_at) : t('permanent', 'Permanent')));
 
 			const actionCell = element('td', 'keyharbor-table-actions');
 			const revoked = credential.status === 'revoked';
-			const button = textElement('button', revoked ? 'Delete' : 'Revoke', 'keyharbor-button');
+			const button = textElement('button', revoked ? t('delete', 'Delete') : t('revoke', 'Revoke'), 'keyharbor-button');
 			button.classList.add('keyharbor-button-danger');
 			button.type = 'button';
 			button.dataset.action = revoked ? 'delete' : 'revoke';
@@ -147,26 +148,38 @@
 
 		async function revoke(credentialId) {
 			const credential = state.credentials.find((item) => String(item.id || '') === String(credentialId));
-			if(!credential || !window.confirm('Revoke "' + (credential.label || 'credential') + '" for ' + (credential.owner_name || credential.owner_login || 'this user') + '?')) { return; }
+			if(!credential || !window.confirm(formatText(
+				t('confirm_revoke', 'Revoke \"{credential}\" for {owner}?'),
+				{
+					credential: credential.label || t('credential_fallback', 'credential'),
+					owner: credential.owner_name || credential.owner_login || t('user_fallback', 'this user')
+				}
+			))) { return; }
 			try {
-				setNotice('Revoking credential…', 'info');
+				setNotice(t('revoking', 'Revoking credential…'), 'info');
 				await postJson({ mode: 'revoke', credential_id: credentialId });
 				await load(false);
-				setNotice('Credential revoked.', 'success');
+				setNotice(t('revoked_success', 'Credential revoked.'), 'success');
 			}
 			catch(error) { setNotice(errorMessage(error), 'error'); }
 		}
 
 		async function deleteCredential(credentialId) {
 			const credential = state.credentials.find((item) => String(item.id || '') === String(credentialId));
-			if(!credential || credential.status !== 'revoked' || !window.confirm('Permanently delete "' + (credential.label || 'credential') + '" for ' + (credential.owner_name || credential.owner_login || 'this user') + '? This removes the credential and its grants.')) { return; }
+			if(!credential || credential.status !== 'revoked' || !window.confirm(formatText(
+				t('confirm_delete', 'Permanently delete \"{credential}\" for {owner}? This removes the credential and its grants.'),
+				{
+					credential: credential.label || t('credential_fallback', 'credential'),
+					owner: credential.owner_name || credential.owner_login || t('user_fallback', 'this user')
+				}
+			))) { return; }
 			try {
-				setNotice('Deleting credential…', 'info');
+				setNotice(t('deleting', 'Deleting credential…'), 'info');
 				await postJson({ mode: 'delete', credential_id: credentialId });
 				state.credentials = state.credentials.filter((item) => String(item.id || '') !== String(credentialId));
 				renderSummary();
 				renderTable();
-				setNotice('Credential deleted.', 'success');
+				setNotice(t('deleted_success', 'Credential deleted.'), 'success');
 			}
 			catch(error) {
 				await load(false);
@@ -180,7 +193,12 @@
 
 		function statusBadge(status) {
 			const normalized = ['active', 'expired', 'revoked'].includes(status) ? status : 'active';
-			const badge = textElement('span', normalized, 'keyharbor-badge');
+			const labels = {
+				active: t('status_active', 'Active'),
+				expired: t('status_expired', 'Expired'),
+				revoked: t('status_revoked', 'Revoked')
+			};
+			const badge = textElement('span', labels[normalized], 'keyharbor-badge');
 			badge.classList.add('keyharbor-badge-' + normalized);
 			return badge;
 		}
@@ -215,8 +233,33 @@
 			return node;
 		}
 
+		function parseJson(value, fallback) {
+			try { return value ? JSON.parse(value) : fallback; }
+			catch(error) { return fallback; }
+		}
+
+		function t(key, fallback) {
+			const value = strings && typeof strings[key] === 'string' ? strings[key].trim() : '';
+			return value || fallback;
+		}
+
+		function formatText(text, values) {
+			return Object.keys(values || {}).reduce((result, key) => {
+				return result.split('{' + key + '}').join(String(values[key] ?? ''));
+			}, String(text || ''));
+		}
+
+		function responseError(data) {
+			const code = data && data.error_code ? String(data.error_code) : '';
+			if(code === 'internal_error') {
+				return formatText(t('error_internal', 'The request failed. Reference: {id}'), { id: data && data.error_id ? data.error_id : '-' });
+			}
+			const localized = code ? t('error_' + code, '') : '';
+			return localized || t('request_failed', 'KeyHarbor admin request failed.');
+		}
+
 		function errorMessage(error) {
-			return error && error.message ? String(error.message) : String(error || 'Unknown error');
+			return error && error.message ? String(error.message) : String(error || t('unknown_error', 'Unknown error'));
 		}
 
 		root.addEventListener('click', (event) => {

@@ -49,7 +49,12 @@ final class KeyManagementDisplay implements IDisplay {
 	}
 
 	public function getHelp(): string {
-		return 'Manage API credentials owned by the current user.';
+		$this->view->setPath(DIR_PLUGIN . 'KeyHarbor');
+		$this->view->loadBricks('Display');
+		$translations = $this->view->getBricks('keyharbor_management_display');
+		$translations = is_array($translations) ? $translations : [];
+		$help = trim((string)($translations['help'] ?? ''));
+		return $help !== '' ? $help : 'Manage API credentials owned by the current user.';
 	}
 
 	private function handleHtml(): string {
@@ -67,7 +72,10 @@ final class KeyManagementDisplay implements IDisplay {
 			$canAdmin = $this->managementService->isCurrentUserAdmin();
 			$profile = $this->userToArray($user, $canAdmin);
 		} catch (CredentialManagementException $exception) {
-			$error = $exception->getMessage();
+			$error = trim((string)($translations['error_' . $exception->getReason()] ?? ''));
+			if ($error === '') {
+				$error = $exception->getMessage();
+			}
 		} catch (Throwable $throwable) {
 			$this->logFailure('KeyHarbor user display failed.', $throwable);
 			$error = trim((string)($translations['unavailable_error'] ?? ''));
