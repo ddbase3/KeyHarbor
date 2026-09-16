@@ -421,3 +421,8 @@ The explicit KeyHarbor credential is evaluated last and therefore becomes the cu
 `KeyHarborAuthentication` identifies bearer and KeyHarbor-HMAC credentials before request handling and returns the credential owner to `SelectedAccesscontrol`. It does not decide which consumer service may run.
 
 Consumer services depend on `CredentialFoundation\Api\ICredentialAccess` and call `authorizeService()` with their own stable service id. This keeps route and plugin knowledge out of the project accesscontrol composition.
+
+## Documentation
+
+- [Frequently Asked Questions](docs/faq.md)
+- [Privacy and data processing](PRIVACY.md)
