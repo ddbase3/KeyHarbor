@@ -3,6 +3,8 @@
 namespace KeyHarbor\Test\Service;
 
 use Base3\Api\IClassMap;
+use Base3\Authorization\Api\IAuthorizationService;
+use Base3\Authorization\Dto\AuthorizationDecision;
 use Base3\Configuration\Api\IConfiguration;
 use Base3\ConfigValue\Api\IConfigValueResolver;
 use Base3\Usermanager\Api\IUsermanager;
@@ -250,8 +252,11 @@ final class CredentialManagementServiceTest extends TestCase {
 		$catalog = new CredentialServiceCatalog(new ManagementTestClassMap([
 			new ManagementTestProvider()
 		]));
+		$authorization = $this->createMock(IAuthorizationService::class);
+		$authorization->method('decide')->willReturn($admin ? AuthorizationDecision::allow() : AuthorizationDecision::deny());
 		$service = new CredentialManagementService(
 			new ManagementTestUsermanager($user ?? $this->user(), $admin),
+			$authorization,
 			$repository,
 			$tokenService,
 			$catalog,
@@ -432,10 +437,6 @@ final class ManagementTestUsermanager implements IUsermanager {
 
 	public function hasRole(Role $role): bool {
 		return false;
-	}
-
-	public function can(Permission $permission): bool {
-		return $this->admin && $permission->scope === 'system' && $permission->permission === 'admin';
 	}
 
 	public function registUser($userid, $password, $data = null) {

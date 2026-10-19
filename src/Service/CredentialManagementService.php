@@ -4,6 +4,8 @@ namespace KeyHarbor\Service;
 
 use Base3\Usermanager\Api\IUsermanager;
 use Base3\Usermanager\Permission;
+use Base3\Authorization\Api\IAuthorizationService;
+use Base3\Authorization\Dto\AuthorizationRequest;
 use Base3\Usermanager\User;
 use CredentialFoundation\Dto\CredentialServiceDefinition;
 use InvalidArgumentException;
@@ -21,6 +23,7 @@ final class CredentialManagementService {
 
 	public function __construct(
 		private readonly IUsermanager $usermanager,
+		private readonly IAuthorizationService $authorization,
 		private readonly ICredentialRepository $repository,
 		private readonly CredentialTokenService $tokenService,
 		private readonly CredentialServiceCatalog $serviceCatalog,
@@ -49,7 +52,7 @@ final class CredentialManagementService {
 			return false;
 		}
 
-		return $this->usermanager->can(Permission::for('system', 'admin'));
+		return $this->authorization->decide(new AuthorizationRequest($this->authorization->getDefaultAuthority(), Permission::for('system', 'admin')))->isAllowed();
 	}
 
 	/**
@@ -281,7 +284,7 @@ final class CredentialManagementService {
 
 	private function requireAdmin(): void {
 		$this->getCurrentUser();
-		if (!$this->usermanager->can(Permission::for('system', 'admin'))) {
+		if (!$this->authorization->decide(new AuthorizationRequest($this->authorization->getDefaultAuthority(), Permission::for('system', 'admin')))->isAllowed()) {
 			throw new CredentialManagementException(
 				CredentialManagementException::ACCESS_DENIED,
 				'System administrator permission is required.'

@@ -347,3 +347,10 @@ Before production use, document and verify:
 - messaging implementation, queue persistence, transport, and provider
 - notification retention and delivery logs
 - handling of clipboard and browser security in administrator and user environments
+
+## Authorization update (2026-10-19)
+
+Credential management's administrator decision is delegated to the single
+`IAuthorizationService` selected by project composition. KeyHarbor no longer reads
+permissions through `IUsermanager::can()`. Existing credential persistence, logging,
+expiry and deletion behavior is otherwise unaffected by this authorization refactor.

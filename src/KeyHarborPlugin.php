@@ -10,6 +10,7 @@ use Base3\ConfigValue\Api\IConfigValueResolver;
 use Base3\Database\Api\IDatabase;
 use Base3\State\Api\IStateStore;
 use Base3\Usermanager\Api\IUsermanager;
+use Base3\Authorization\Api\IAuthorizationService;
 use CredentialFoundation\Api\IApiCredentialService;
 use CredentialFoundation\Api\ICredentialAccess;
 use KeyHarbor\Api\ICredentialRepository;
@@ -84,6 +85,7 @@ final class KeyHarborPlugin implements IPlugin {
 				CredentialManagementService::class,
 				fn($c) => new CredentialManagementService(
 					$c->get(IUsermanager::class),
+					$c->get(IAuthorizationService::class),
 					$c->get(ICredentialRepository::class),
 					$c->get(CredentialTokenService::class),
 					$c->get(CredentialServiceCatalog::class),
