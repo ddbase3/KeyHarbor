@@ -25,6 +25,14 @@ use PHPUnit\Framework\TestCase;
 
 final class CredentialManagementServiceTest extends TestCase {
 
+	public function testUsermanagerFixtureSupportsSearchContract(): void {
+		$user = $this->user();
+		$usermanager = new ManagementTestUsermanager($user, false);
+
+		self::assertSame([], $usermanager->searchUsers('demo'));
+		self::assertSame($user, $usermanager->getUserById(42));
+	}
+
 	public function testCreatesHmacCredentialWithEncryptedSecretAndRotatesIt(): void {
 		[$service] = $this->createService();
 
@@ -448,6 +456,10 @@ final class ManagementTestUsermanager implements IUsermanager {
 	}
 
 	public function getAllUsers() {
+		return [];
+	}
+
+	public function searchUsers(string $query, int $limit = 20, int $offset = 0): array {
 		return [];
 	}
 
