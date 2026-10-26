@@ -566,6 +566,10 @@
 	gap: 12px;
 }
 
+.keyharbor-encryption .keyharbor-form-row {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .keyharbor-switch-row {
 	display: flex;
 	align-items: center;
@@ -812,6 +816,7 @@
 @media (max-width: 640px) {
 	.keyharbor-grid,
 	.keyharbor-form-row,
+	.keyharbor-encryption .keyharbor-form-row,
 	.keyharbor-admin-summary,
 	.keyharbor-meta {
 		grid-template-columns: 1fr;
@@ -839,3 +844,16 @@
 		flex: 1 1 auto;
 	}
 }
+
+/* Managed encryption uses the existing KeyHarbor administration controls. */
+.keyharbor-encryption-targets { margin-top: 28px; }
+.keyharbor-encryption-targets h2 { margin: 0 0 6px; font-size: 18px; }
+.keyharbor-encryption-key { padding: 12px; border: 1px solid var(--kh-border); border-radius: 5px; margin: 12px 0; }
+.keyharbor-encryption-key-header { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.keyharbor-encryption-key-header .keyharbor-field { flex: 1 1 175px; }
+.keyharbor-encryption-key-details { display: flex; flex-wrap: wrap; gap: 10px; }
+.keyharbor-encryption-key-details .keyharbor-field { flex: 1 1 180px; }
+.keyharbor-encryption-note, .keyharbor-encryption-id { display: block; color: var(--kh-muted); font-size: 12px; }
+.keyharbor-encryption-select { width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--kh-border-strong); border-radius: 4px; }
+.keyharbor-encryption-select:focus-visible { outline: 2px solid var(--kh-focus); outline-offset: 2px; }
+.keyharbor-encryption .keyharbor-dialog { width: min(780px, calc(100% - 24px)); }

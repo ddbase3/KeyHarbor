@@ -2,8 +2,8 @@
 	"manifestVersion": 1,
 	"name": "KeyHarbor",
 	"namespace": "KeyHarbor",
-	"version": "4.3.0",
-	"description": "KeyHarbor is the BASE3 implementation plugin for durable API credentials.",
+	"version": "4.4.0",
+	"description": "KeyHarbor manages durable API credentials and reusable encryption profiles.",
 	"license": "GPL-3.0-or-later",
 	"maintainers": [
 		{
@@ -15,7 +15,7 @@
 	"repository": "https://github.com/ddbase3/KeyHarbor",
 	"dependencies": {
 		"Base3Framework": ">=4.10.0",
-		"CredentialFoundation": ">=4.1.0",
+		"CredentialFoundation": ">=4.2.0",
 		"MessagingFoundation": ">=4.2.0"
 	}
 }

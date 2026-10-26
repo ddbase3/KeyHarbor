@@ -9,9 +9,11 @@ use Base3\Configuration\Api\IConfiguration;
 use Base3\ConfigValue\Api\IConfigValueResolver;
 use Base3\Database\Api\IDatabase;
 use Base3\State\Api\IStateStore;
+use Base3\Settings\Api\ISettingsStore;
 use Base3\Usermanager\Api\IUsermanager;
 use Base3\Authorization\Api\IAuthorizationService;
 use CredentialFoundation\Api\IApiCredentialService;
+use CredentialFoundation\Api\IEncryptionProfileService;
 use CredentialFoundation\Api\ICredentialAccess;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Repository\DatabaseCredentialRepository;
@@ -21,6 +23,7 @@ use KeyHarbor\Security\HmacRequestSigner;
 use KeyHarbor\Service\ApiCredentialService;
 use KeyHarbor\Service\CredentialManagementService;
 use KeyHarbor\Service\CredentialServiceCatalog;
+use KeyHarbor\Service\EncryptionProfileService;
 
 final class KeyHarborPlugin implements IPlugin {
 
@@ -79,6 +82,22 @@ final class KeyHarborPlugin implements IPlugin {
 			->set(
 				ICredentialAccess::class,
 				IApiCredentialService::class,
+				IContainer::ALIAS
+			)
+			->set(
+				EncryptionProfileService::class,
+				fn($c) => new EncryptionProfileService(
+					$c->get(ISettingsStore::class),
+					$c->get(IConfigValueResolver::class),
+					$c->get(IClassMap::class),
+					$c->get(CredentialSecretCipher::class),
+					$c->get(CredentialManagementService::class)
+				),
+				IContainer::SHARED | IContainer::NOOVERWRITE
+			)
+			->set(
+				IEncryptionProfileService::class,
+				EncryptionProfileService::class,
 				IContainer::ALIAS
 			)
 			->set(

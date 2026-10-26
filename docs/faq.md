@@ -2,7 +2,7 @@
 
 ## What is KeyHarbor?
 
-KeyHarbor is the BASE3 implementation plugin for durable API credentials. It provides credential creation, storage, rotation, revocation, deletion, service grants, bearer authentication, HMAC-SHA256 authentication, user management, administration, and expiration notifications.
+KeyHarbor is the BASE3 implementation plugin for durable API credentials and managed encryption profiles. It provides credential creation, storage, rotation, revocation, deletion, service grants, bearer authentication, HMAC-SHA256 authentication, user management, administration, expiration notifications, and a separate encryption profile administration page.
 
 It implements the credential contracts from CredentialFoundation and supplies the concrete runtime services used by credential-protected consumers.
 
@@ -332,3 +332,58 @@ The core credential implementation does not make external HTTP requests. Expirat
 ## Where can I find the privacy and data-processing details?
 
 See [PRIVACY.md](../PRIVACY.md).
+
+
+## How does the encryption profile administration work?
+
+The `encryptionprofilesdisplay` BASE3 administration page manages profiles,
+key sources and assignments within a single interface. It reuses the existing
+KeyHarbor styles, requires system administrator authorization and does not
+modify the API credential administration pages. Only discovered providers of
+`IEncryptionTargetProvider` can receive new assignments. No consumer data
+stores are inspected to decide whether a historical key is safe to delete.
+
+Profiles and assignments are held in `ISettingsStore`. A fixed secret is
+protected using the same deployment master key as HMAC secrets. `env`, `file`
+and `configuration` sources keep only their source descriptions in settings.
+Decryption looks up a globally unique historical key ID and stored method;
+it is independent of the current target assignment. Losing an old key can
+permanently prevent decryption of existing data.
+
+## Why does saving a fixed encryption key report a master-key configuration error?
+
+A `fixed` key is encrypted in KeyHarbor before its source definition is saved
+to `ISettingsStore`. That requires the existing `CredentialSecretCipher`
+master key in the active BASE3 configuration: `keyharbor.hmac_master_key`.
+Its value must be base64-encoded random 32-byte key material or a supported
+`env`/`file` ConfigValue definition. Generate a new value only when no master
+key has already been used, for example with:
+
+```bash
+php -r 'echo base64_encode(random_bytes(32)), PHP_EOL;'
+```
+
+The KeyHarbor administration now reports this prerequisite directly in the
+profile editor. Do not replace a working master key, as existing fixed secrets
+and HMAC credentials could become unreadable.
+
+## Can I delete an old encryption key or profile?
+
+No. Once saved, encryption profiles and their keys cannot be deleted from the
+KeyHarbor administration. Saved key IDs, sources and secret values are immutable.
+This protects ciphertext that might still require an older key, including data
+outside MissionBay. Only unsaved new key entries can be discarded in the editor.
+
+## How do I rotate an encryption key?
+
+For a profile whose active key has a `fixed` source, select **Rotate**. The
+server creates a random new secret and key ID, protects the new secret using
+KeyHarbor's master key, and activates it. All previous secrets stay available
+for decryption. This deliberately differs from rotating an API credential,
+which invalidates its previous token.
+
+For environment, file or BASE3 configuration sources, create a new key entry
+pointing to the new external source, save, then activate the new key. Do not
+change or delete the previous external secret while historical encrypted data
+may still refer to it. KeyHarbor cannot protect external sources against
+out-of-band mutation. Back up both the SettingsStore records and the master key.

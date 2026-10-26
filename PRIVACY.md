@@ -354,3 +354,39 @@ Credential management's administrator decision is delegated to the single
 `IAuthorizationService` selected by project composition. KeyHarbor no longer reads
 permissions through `IUsermanager::can()`. Existing credential persistence, logging,
 expiry and deletion behavior is otherwise unaffected by this authorization refactor.
+
+
+## Managed encryption profiles and access
+
+KeyHarbor also stores administrator-configured encryption profiles in
+`ISettingsStore` groups `keyharbor_encryption_profiles` and
+`keyharbor_encryption_targets`. Profile data consists of administrator-chosen
+IDs and labels, encryption method, active key ID, source definitions and
+consumer assignments. These labels and file/environment/configuration source
+names may contain organization-sensitive information and are visible only to
+users authorized for system administration through the new page.
+
+A `fixed` secret is encrypted with the existing KeyHarbor HMAC master key using
+sodium secretbox and a random nonce before it is passed to `ISettingsStore`.
+The encrypted ciphertext and nonce, but not the raw value, are stored in the
+profile. The encryption key is resolved on demand for trusted runtime
+consumers. The selected source may alternatively refer to `env`, `file`, or
+BASE3 configuration; in those cases KeyHarbor stores the source definition,
+not the resolved secret. Access to those sources and master-key backups depends
+on the actual deployment. Source definitions are never sent with fixed secrets
+in JSON administration responses.
+
+Persisted encryption profiles and keys cannot be deleted or altered through
+the KeyHarbor administration API. Key rotation for active fixed keys adds a
+new encrypted random secret and selects it for new writes while retaining all
+historical secret definitions for decryption. Metadata labels and active key
+selections remain editable. For external env/file/configuration sources,
+KeyHarbor cannot prevent a system operator from changing or removing secret
+material outside KeyHarbor. No external encrypted files, conversation histories,
+backups or ciphertexts are inspected or deleted. Their historical dependency
+on a secret cannot be determined by KeyHarbor. Runtime `IEncryptionProfileService`
+can return the secret to trusted PHP consumers; consumers must never log or
+persist it. SettingsStore backend retention, audit logging, backup retention and
+possible external transfers depend on the project implementation and cannot be
+verified by this plugin alone. The new browser controls do not store secret
+values in browser persistent storage. Key edits must be authorized server-side.

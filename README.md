@@ -1,6 +1,6 @@
 # KeyHarbor
 
-KeyHarbor is the BASE3 implementation plugin for durable API credentials.
+KeyHarbor is the BASE3 implementation plugin for durable API credentials and centrally managed encryption profiles.
 
 The current implementation provides:
 
@@ -183,15 +183,12 @@ checks.
 Bearer-only credentials return `hmac_not_enabled` when passed to
 `authenticateHmac()`.
 
-The schema already reserves encrypted secret fields, but HMAC-enabled
-credentials are not accepted until the dedicated encryption, timestamp, nonce
-and signature verification step is installed. KeyHarbor does not silently treat
-an HMAC-enabled credential as a bearer credential and does not provide an
-insecure plaintext fallback.
+HMAC credentials are authenticated through the dedicated encrypted-secret,
+timestamp, nonce and signature verification path. KeyHarbor never treats an
+HMAC credential as a bearer credential or falls back to plaintext.
 
-The management UI currently creates bearer credentials only. Rotation of an
-HMAC-enabled record is rejected until the HMAC implementation can replace both
-the hash and encrypted secret atomically.
+The management UI supports bearer and HMAC credentials. Rotation of HMAC
+credentials replaces the hash and encrypted secret together.
 
 ## Database schema
 
@@ -203,8 +200,8 @@ base3_keyharbor_grant
 ```
 
 The key table stores owner metadata, lifecycle state, notification state and
-reserved encrypted-secret fields for the planned HMAC mode. HMAC cannot be
-enabled without encrypted secret material.
+encrypted-secret fields for the HMAC mode. HMAC cannot be enabled without
+encrypted secret material.
 
 The grant table stores one row per credential and service id.
 
@@ -426,3 +423,91 @@ Consumer services depend on `CredentialFoundation\Api\ICredentialAccess` and cal
 
 - [Frequently Asked Questions](docs/faq.md)
 - [Privacy and data processing](PRIVACY.md)
+
+
+## Managed encryption profiles
+
+Encryption is administered in **one separate** `EncryptionProfilesDisplay` page.
+The existing `KeyManagementDisplay` and `KeyHarborAdminDisplay` retain their
+API credential responsibilities and user interfaces. In the supplied BASE3/ILIAS
+Lab project configuration the new page appears as a single additional subtab
+under Credentials. No new navigation subsystem is used.
+
+`EncryptionProfileService` implements `CredentialFoundation\Api\IEncryptionProfileService`
+from CredentialFoundation and is registered in the KeyHarbor plugin through DI.
+All profile and assignment changes are authorized as `system/admin` operations
+and require AJAX JSON POST in the administration display. Providers are
+classmap-discoverable `IEncryptionTargetProvider` implementations from other
+plugins and enumerate real configured consumers with globally stable IDs.
+The current version adds the provider contract; consumer plugins must implement
+it to appear as selectable targets. The list is empty when none are installed.
+
+Two named `ISettingsStore` groups hold the complete authoritative state:
+
+- `keyharbor_encryption_profiles`: name = stable profile ID, value = label,
+  ICrypt method, active `key_id`, and the map of source definitions under `keys`.
+- `keyharbor_encryption_targets`: name = stable target ID, value = `profile_id`.
+
+A source definition supports exactly `fixed`, `configuration`, `env` or `file`.
+Environment and file sources resolve using BASE3 `IConfigValueResolver` at
+runtime; `configuration` uses the existing group/key resolver. Fixed sources
+are encrypted **before** entering `ISettingsStore` with the existing
+`CredentialSecretCipher` and its deployment master key. Fixed secrets therefore
+require `keyharbor.hmac_master_key` to be configured as a base64-encoded 32-byte
+value or a supported env/file resolver definition. The UI never returns fixed
+secrets or their encrypted ciphertext/nonce. Back up the KeyHarbor master key
+separately from settings storage.
+
+If a fixed-key save reports that the KeyHarbor master key is unavailable,
+configure `keyharbor.hmac_master_key` in the active BASE3 `IConfiguration`
+backend. This is a deployment-level prerequisite, not the key entered in the
+profile form. Generate a master key using
+`php -r 'echo base64_encode(random_bytes(32)), PHP_EOL;'` and configure the
+resulting base64 value, or configure an `env`/`file` ConfigValue definition.
+In embedded deployments, use the actual active BASE3 configuration backend
+rather than assuming a project-local INI file. Do not replace an existing
+master key: previous fixed secrets and HMAC credentials may become unreadable.
+The encryption administration returns a localized, actionable message for
+this configuration error instead of a generic error reference; unexpected
+failures continue to be logged with their reference ID.
+
+Encryption method IDs are discovered from BASE3 `ICrypt`; KeyHarbor does not
+implement encryption algorithms. A profile's method and ID are immutable after
+creation. Global uniqueness of key IDs is checked across configured profiles.
+Stored encryption profile records and their key definitions are intentionally
+**not deletable** through KeyHarbor administration or its AJAX API. A persisted
+key ID, source mode, source path/name and fixed secret cannot be edited or
+replaced. The UI renders stored keys read-only and offers **Cancel** only
+for new entries not yet saved. The server rejects omitted or changed stored
+keys even when a direct JSON request bypasses the editor. Labels, additional
+keys and the active key selection can still be updated.
+
+For profiles whose active key uses `fixed`, the **Rotate** action generates
+32 random bytes, base64-encodes the result, encrypts it with the existing
+master key and saves it under a new globally unique key ID. Only the active
+key ID changes. All previous keys remain available to `getReadKey()` so
+historical ciphertext remains readable. Unlike API credential rotation,
+**encryption-key rotation does not revoke or overwrite old secrets**.
+
+For `env`, `file` and `configuration` key sources, operators add a new
+uniquely named source, then select it as active. KeyHarbor does not modify
+external secret files, environment variables or configuration values. These
+sources remain mutable outside KeyHarbor; external changes can still break
+historical decryption. Removing a consumer assignment does not prove that a
+historical key is unused. KeyHarbor never scans consumers' data tables.
+
+Consumers persist method and key ID beside ciphertext. The active profile
+assignment determines only new writes; `getReadKey($method, $keyId)` finds
+previously configured keys independently of the current target assignment.
+Deleting key material outside KeyHarbor or changing external secret material
+may permanently make historical data unreadable. KeyHarbor cannot determine
+whether a key is still needed by arbitrary external data. Persisted profiles
+and keys are protected from deletion through the application, but the SettingsStore
+backend and the KeyHarbor master key still require reliable backups and
+access control according to deployment-specific retention policies.
+
+MissionBay database-memory presets are now discovered through the shared
+provider and lookup contracts. Encryption assignments are configured only in
+KeyHarbor, without local encryption settings on the memory resource. Historical
+ciphertext still requires its original key material; the integration does not
+rewrite existing encrypted data.
