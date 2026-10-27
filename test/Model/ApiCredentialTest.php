@@ -41,6 +41,33 @@ final class ApiCredentialTest extends TestCase {
 		self::assertSame(2500, $revoked->getRevokedAt());
 	}
 
+	public function testTechnicalCredentialKeepsSubjectAndExactOperationsThroughCopies(): void {
+		$credential = new ApiCredential(
+			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', 'admin@example.test', 'en',
+			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
+			['memora:entries'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
+			['memora:entries' => ['getEntries']]
+		);
+		self::assertSame('contourz', $credential->getSubject()->getId());
+		self::assertSame('42', $credential->getOwnerUserId());
+		self::assertFalse($credential->hasOperation('memora:entries', 'deleteEntry'));
+		self::assertTrue($credential->hasOperation('memora:entries', 'getEntries'));
+		foreach ([$credential->withRevokedAt(2000), $credential->withManagementData('Changed', 'admin@example.test', 'en', null, ['memora:entries']), $credential->withRotatedSecret(str_repeat('d', 20), str_repeat('e', 64), 'new-encrypted', 'new-nonce')] as $copy) {
+			self::assertTrue($copy->isServiceCredential());
+			self::assertSame('contourz', $copy->getSubject()->getId());
+			self::assertFalse($copy->hasOperation('memora:entries', 'deleteEntry'));
+		}
+	}
+
+	public function testRejectsServiceCredentialWithoutExactOperationGrants(): void {
+		$this->expectException(InvalidArgumentException::class);
+		new ApiCredential(
+			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', '', 'en',
+			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
+			['memora:entries'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'), []
+		);
+	}
+
 	public function testRejectsCredentialWithoutServiceGrant(): void {
 		$this->expectException(InvalidArgumentException::class);
 		$this->credential([]);

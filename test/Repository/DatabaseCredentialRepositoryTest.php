@@ -23,6 +23,29 @@ final class DatabaseCredentialRepositoryTest extends TestCase {
 		self::assertStringContainsString("'example:write'", $database->queries[2]);
 	}
 
+	public function testStoresExplicitOperationGrantsForServiceCredential(): void {
+		$database = new RepositoryTestDatabase();
+		$repo = new DatabaseCredentialRepository($database);
+		$credential = new ApiCredential(
+			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', '', 'en',
+			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
+			['example:read'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
+			['example:read' => ['getEntries']]
+		);
+		$repo->insert($credential);
+		self::assertStringContainsString("'service'", $database->queries[0]);
+		self::assertStringContainsString("'contourz'", $database->queries[0]);
+		self::assertStringContainsString('operations_json', $database->queries[1]);
+		self::assertStringContainsString('getEntries', $database->queries[1]);
+	}
+
+	public function testOwnerLookupExcludesTechnicalCredentialInStorageQuery(): void {
+		$database = new RepositoryTestDatabase();
+		$repo = new DatabaseCredentialRepository($database);
+		$repo->getByOwner(str_repeat('a', 32), '42');
+		self::assertStringContainsString("subject_type='user'", $database->singleQueries[0]);
+	}
+
 	public function testLoadsCredentialByPublicIdWithGrants(): void {
 		$database = new RepositoryTestDatabase();
 		$database->singleResponses[] = $this->row();

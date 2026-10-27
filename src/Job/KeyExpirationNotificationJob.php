@@ -11,6 +11,7 @@ use Base3\Worker\Api\IPolicyControlledJob;
 use Base3\Worker\Policy\PolicyControlledJobTrait;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Display\KeyManagementDisplay;
+use KeyHarbor\Display\KeyHarborAdminDisplay;
 use KeyHarbor\Message\KeyExpiredMessageTypeProvider;
 use KeyHarbor\Message\KeyExpiringMessageTypeProvider;
 use KeyHarbor\Model\ApiCredential;
@@ -197,7 +198,8 @@ final class KeyExpirationNotificationJob implements IPolicyControlledJob {
 			'service_labels' => $this->getServiceLabels($credential),
 			'system_name' => $this->getSystemName(),
 			'manage_url' => $this->linkTargetService->getLink([
-				'name' => KeyManagementDisplay::getName(),
+				'name' => $credential->isServiceCredential()
+					? KeyHarborAdminDisplay::getName() : KeyManagementDisplay::getName(),
 				'out' => 'html'
 			])
 		];

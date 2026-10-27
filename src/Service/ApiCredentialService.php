@@ -5,10 +5,11 @@ namespace KeyHarbor\Service;
 use Base3\Configuration\Api\IConfiguration;
 use Base3\State\Api\IStateStore;
 use CredentialFoundation\Api\IApiCredentialService;
-use CredentialFoundation\Api\ICredentialAccess;
+use CredentialFoundation\Api\ICredentialOperationAccess;
 use CredentialFoundation\Dto\CredentialAuthenticationResult;
 use CredentialFoundation\Dto\CredentialIdentityResult;
 use CredentialFoundation\Dto\HmacAuthenticationRequest;
+use CredentialFoundation\Dto\CredentialSubject;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Exception\CredentialHmacConfigurationException;
 use KeyHarbor\Model\ApiCredential;
@@ -19,7 +20,7 @@ use KeyHarbor\Security\HmacRequestSigner;
 /**
  * Authenticates credentials and authorizes their service grants.
  */
-final class ApiCredentialService implements IApiCredentialService, ICredentialAccess {
+final class ApiCredentialService implements IApiCredentialService, ICredentialOperationAccess {
 
 	private const DEFAULT_CLOCK_SKEW_SECONDS = 300;
 	private const MINIMUM_CLOCK_SKEW_SECONDS = 30;
@@ -159,8 +160,42 @@ final class ApiCredentialService implements IApiCredentialService, ICredentialAc
 	}
 
 	public function authorizeService(string $serviceId): CredentialAuthenticationResult {
-		$serviceId = trim($serviceId);
-		if ($serviceId === '') {
+		$rejection = $this->checkServiceGrant($serviceId);
+		if ($rejection !== null) {
+			return $rejection;
+		}
+		if ($this->currentCredential->isServiceCredential()) {
+			return CredentialAuthenticationResult::failure(
+				CredentialAuthenticationResult::FAILURE_OPERATION_REQUIRED,
+				$serviceId
+			);
+		}
+		return $this->successForService($serviceId);
+	}
+
+	public function authorizeOperation(string $serviceId, string $operation): CredentialAuthenticationResult {
+		$rejection = $this->checkServiceGrant($serviceId);
+		if ($rejection !== null) {
+			return $rejection;
+		}
+		$service = $this->serviceCatalog->getService($serviceId);
+		if ($service === null || !in_array($operation, $service->getOperations(), true)) {
+			return CredentialAuthenticationResult::failure(
+				CredentialAuthenticationResult::FAILURE_OPERATION_NOT_FOUND,
+				$serviceId
+			);
+		}
+		if (!$this->currentCredential->hasOperation($serviceId, $operation)) {
+			return CredentialAuthenticationResult::failure(
+				CredentialAuthenticationResult::FAILURE_OPERATION_NOT_GRANTED,
+				$serviceId
+			);
+		}
+		return $this->successForService($serviceId);
+	}
+
+	private function checkServiceGrant(string $serviceId): ?CredentialAuthenticationResult {
+		if (trim($serviceId) === '' || !$this->serviceCatalog->hasService($serviceId)) {
 			return CredentialAuthenticationResult::failure(
 				CredentialAuthenticationResult::FAILURE_SERVICE_NOT_FOUND,
 				$serviceId
@@ -172,24 +207,23 @@ final class ApiCredentialService implements IApiCredentialService, ICredentialAc
 				$serviceId
 			);
 		}
-		if (!$this->serviceCatalog->hasService($serviceId)) {
-			return CredentialAuthenticationResult::failure(
-				CredentialAuthenticationResult::FAILURE_SERVICE_NOT_FOUND,
-				$serviceId
-			);
-		}
 		if (!$this->currentCredential->hasService($serviceId)) {
 			return CredentialAuthenticationResult::failure(
 				CredentialAuthenticationResult::FAILURE_SERVICE_NOT_GRANTED,
 				$serviceId
 			);
 		}
+		return null;
+	}
 
+	private function successForService(string $serviceId): CredentialAuthenticationResult {
+		$credential = $this->currentCredential;
 		return CredentialAuthenticationResult::success(
-			$this->currentCredential->getId(),
-			$this->currentCredential->getOwnerUserId(),
+			$credential->getId(),
+			$credential->isServiceCredential() ? null : $credential->getOwnerUserId(),
 			$serviceId,
-			$this->currentCredential->getExpiresAt()
+			$credential->getExpiresAt(),
+			$credential->getSubject()
 		);
 	}
 
@@ -233,8 +267,9 @@ final class ApiCredentialService implements IApiCredentialService, ICredentialAc
 
 		return $this->setIdentity(CredentialIdentityResult::success(
 			$credential->getId(),
-			$credential->getOwnerUserId(),
-			$credential->getExpiresAt()
+			$credential->isServiceCredential() ? null : $credential->getOwnerUserId(),
+			$credential->getExpiresAt(),
+			$credential->getSubject()
 		));
 	}
 

@@ -15,6 +15,7 @@ use Base3\Authorization\Api\IAuthorizationService;
 use CredentialFoundation\Api\IApiCredentialService;
 use CredentialFoundation\Api\IEncryptionProfileService;
 use CredentialFoundation\Api\ICredentialAccess;
+use CredentialFoundation\Api\ICredentialOperationAccess;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Repository\DatabaseCredentialRepository;
 use KeyHarbor\Security\CredentialSecretCipher;
@@ -81,6 +82,11 @@ final class KeyHarborPlugin implements IPlugin {
 			)
 			->set(
 				ICredentialAccess::class,
+				IApiCredentialService::class,
+				IContainer::ALIAS
+			)
+			->set(
+				ICredentialOperationAccess::class,
 				IApiCredentialService::class,
 				IContainer::ALIAS
 			)

@@ -45,6 +45,10 @@ final class KeyHarborAuthentication extends AbstractAuth {
 			return 0;
 		}
 
+		// A service credential must never be a human session.
+		if ($result->getSubject()?->isService() === true) {
+			return 0;
+		}
 		$userId = $result->getUserId();
 		if ($userId === null || trim((string)$userId) === '') {
 			return 0;

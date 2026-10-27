@@ -17,6 +17,24 @@ The current implementation provides:
 - system-administrator credential overview and revocation
 - one-time token display during creation and rotation
 
+## Technical service credentials (service-identity extension)
+
+KeyHarbor now supports a separate `CredentialSubject('service', 'contourz')` alongside legacy user-owned credentials. The **owner** remains the administrator who created the key; the **subject** is the principal verified by the credential. They are not interchangeable. Service credentials are HMAC-only and must have explicit, exact operations for each selected service. An unrestricted `authorizeService()` call denies service principals.
+
+Admin creation, editing, rotation, revocation and deletion are available through the existing AJAX-only `KeyHarborAdminDisplay`, guarded on the server with `IAuthorizationService` (`system:admin`). The one-time token is visible only on successful create/rotate. Existing user management excludes service credentials.
+
+Providers must declare the exact methods before administrators can grant them, for example:
+
+```php
+new CredentialServiceDefinition('xrm:entity:data', 'XRM Entity Data', '', ['getEntries', 'getEntry']);
+```
+
+**No production service is granted automatically.** A newly created service credential cannot authenticate as a human user through `KeyHarborAuthentication`. Step 1 introduces no XRM wiring or browser/data endpoint changes. The subsequent XRM project integration must accept the verified service principal, enforce `ICredentialOperationAccess::authorizeOperation()` and separately invoke the authoritative `IAuthorizationService` plus Memora native ACL. This plugin does **not** create an ACL policy backend or grant administrator rights to services.
+
+### Additive schema migration 002
+
+`KeyHarborMigrationProvider` now declares `Migration002CredentialSubjects`, adding `subject_type`, `subject_id` and per-service `operations_json`. Existing rows are backfilled to `subject_type=user`, `subject_id=owner_user_id`. Migration 001 remains immutable. The project must use the configured `DatabaseMigrationRunner`, not `NoMigrationRunner`. **Database backup and a successful migration check are required before replacing the repository code.** Migration 002 adds columns and does not drop data. See the release INSTALL guide.
+
 ## Dependencies
 
 KeyHarbor depends on:
@@ -511,3 +529,24 @@ provider and lookup contracts. Encryption assignments are configured only in
 KeyHarbor, without local encryption settings on the memory resource. Historical
 ciphertext still requires its original key material; the integration does not
 rewrite existing encrypted data.
+
+## Embedded administration page headings
+
+All three KeyHarbor administration views (personal credential management, administrator credential
+management and encryption profiles) render their intro/action bar as a neutral `.keyharbor-hero`
+`<div>`, with the localized page title as `<h2>` instead of a nested `<header>`/`<h1>`.
+The surrounding BASE3 admin tab owns the page structure. No extra ARIA landmarks are introduced.
+Nested `<header class="keyharbor-dialog-header">` elements remain unchanged: they label
+individual modal dialogs and are not the embedded page intro.
+
+The shared stylesheet preserves the old hero title typography for `<h2>` throughout KeyHarbor.
+Service-credential controls, encryption-profile controls, AJAX action attributes, dialog markup,
+asset loading, access checks and service APIs are unchanged. No new translations or data flows are
+introduced by this markup-only update.
+
+Run the standalone KeyHarbor hero regression test (including 12 locale catalogs, normal and
+error states, and existing dialog/action semantics):
+
+```sh
+php plugin/KeyHarbor/test/Display/EncryptionProfilesHeaderSmoke.php
+```

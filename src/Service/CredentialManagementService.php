@@ -8,6 +8,7 @@ use Base3\Authorization\Api\IAuthorizationService;
 use Base3\Authorization\Dto\AuthorizationRequest;
 use Base3\Usermanager\User;
 use CredentialFoundation\Dto\CredentialServiceDefinition;
+use CredentialFoundation\Dto\CredentialSubject;
 use InvalidArgumentException;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Dto\IssuedCredential;
@@ -139,6 +140,171 @@ final class CredentialManagementService {
 
 		$this->repository->insert($credential);
 		return new IssuedCredential($credential, $generatedToken);
+	}
+
+	/**
+	 * Create a HMAC-only technical credential with explicitly selected operations.
+	 * @param string $serviceSubjectId Stable, lower-case technical principal id.
+	 * @param string $label Human-readable credential label.
+	 * @param string $notificationAddress Expiration contact address (required if expiring).
+	 * @param string $notificationLanguage Notification language.
+	 * @param int|null $expiresAt Future expiry or null for no expiry.
+	 * @param array<string,array<int,string>> $operationGrants Operation ids selected from discovered service definitions.
+	 * @return IssuedCredential The credential plus one-time token.
+	 * @throws CredentialManagementException If the current actor is not an administrator.
+	 * @throws InvalidArgumentException If the subject or grants are invalid.
+	 * Side effect: persists a new, independently revocable credential.
+	 */
+	public function createForService(
+		string $serviceSubjectId,
+		string $label,
+		string $notificationAddress,
+		string $notificationLanguage,
+		?int $expiresAt,
+		array $operationGrants
+	): IssuedCredential {
+		$this->requireAdmin();
+		$actor = $this->getCurrentUser();
+		$subject = new CredentialSubject(CredentialSubject::TYPE_SERVICE, $serviceSubjectId);
+		$expiresAt = $this->normalizeExpiresAt($expiresAt);
+		$grants = $this->normalizeOperationGrants($operationGrants);
+		$generatedToken = $this->tokenService->generate();
+		$encryptedSecret = $this->secretCipher->encrypt($generatedToken->getSecret());
+		$ownerLogin = trim((string)($actor->userid ?? ''));
+		if ($ownerLogin === '') {
+			$ownerLogin = (string)$actor->id;
+		}
+		$credential = new ApiCredential(
+			$generatedToken->getCredentialId(),
+			$generatedToken->getPublicId(),
+			(string)$actor->id,
+			$ownerLogin,
+			trim((string)($actor->name ?? '')) ?: $ownerLogin,
+			$this->normalizeNotificationAddress($notificationAddress, (string)($actor->email ?? ''), $expiresAt),
+			$this->normalizeNotificationLanguage($notificationLanguage, (string)($actor->lang ?? '')),
+			$this->normalizeLabel($label),
+			$generatedToken->getSecretHash(),
+			true,
+			$encryptedSecret->getCiphertext(),
+			$encryptedSecret->getNonce(),
+			time(), $expiresAt, null, null, null,
+			array_keys($grants),
+			$subject,
+			$grants
+		);
+		$this->repository->insert($credential);
+		return new IssuedCredential($credential, $generatedToken);
+	}
+
+	/**
+	 * Edit a service credential without changing its verified technical subject.
+	 * @param string $credentialId Existing credential id.
+	 * @param string $label Updated label.
+	 * @param string $notificationAddress Updated notification address.
+	 * @param string $notificationLanguage Updated notification language.
+	 * @param int|null $expiresAt Expiry timestamp.
+	 * @param array<string,array<int,string>> $operationGrants Entire replacement grant map.
+	 * @return ApiCredential Updated credential retaining subject and secret.
+	 * @throws CredentialManagementException If denied, revoked or missing.
+	 * @throws InvalidArgumentException For invalid grants or metadata.
+	 * Side effect: replaces credential metadata and grants.
+	 */
+	public function updateServiceAsAdmin(
+		string $credentialId,
+		string $label,
+		string $notificationAddress,
+		string $notificationLanguage,
+		?int $expiresAt,
+		array $operationGrants
+	): ApiCredential {
+		$this->requireAdmin();
+		$credential = $this->requireServiceCredential($credentialId);
+		if ($credential->isRevoked()) {
+			throw new CredentialManagementException(CredentialManagementException::REVOKED, 'Revoked credentials cannot be edited.');
+		}
+		$grants = $this->normalizeOperationGrants($operationGrants);
+		$expiresAt = $this->normalizeExpiresAt($expiresAt, $credential);
+		$updated = $credential->withManagementData(
+			$this->normalizeLabel($label),
+			$this->normalizeNotificationAddress($notificationAddress, $credential->getNotificationAddress(), $expiresAt),
+			$this->normalizeNotificationLanguage($notificationLanguage, $credential->getNotificationLanguage()),
+			$expiresAt,
+			array_keys($grants),
+			$grants
+		);
+		if (!$this->repository->update($updated)) {
+			throw $this->notFound();
+		}
+		return $updated;
+	}
+
+	/**
+	 * Rotate a technical HMAC credential, immediately invalidating its prior token.
+	 * @param string $credentialId Existing service credential id.
+	 * @return IssuedCredential New one-time token and updated credential.
+	 * @throws CredentialManagementException If not authorized, revoked, expired or missing.
+	 * Side effect: replaces stored HMAC secret and public id.
+	 */
+	public function rotateServiceAsAdmin(string $credentialId): IssuedCredential {
+		$this->requireAdmin();
+		$credential = $this->requireServiceCredential($credentialId);
+		if ($credential->isRevoked()) {
+			throw new CredentialManagementException(CredentialManagementException::REVOKED, 'Revoked credentials cannot be rotated.');
+		}
+		if ($credential->isExpired(time())) {
+			throw new CredentialManagementException(CredentialManagementException::EXPIRED, 'Extend expiration before rotating an expired credential.');
+		}
+		$token = $this->tokenService->generateForCredential($credential->getId());
+		$secret = $this->secretCipher->encrypt($token->getSecret());
+		$updated = $credential->withRotatedSecret(
+			$token->getPublicId(), $token->getSecretHash(), $secret->getCiphertext(), $secret->getNonce()
+		);
+		if (!$this->repository->update($updated)) {
+			throw $this->notFound();
+		}
+		return new IssuedCredential($updated, $token);
+	}
+
+	private function requireServiceCredential(string $credentialId): ApiCredential {
+		$credential = $this->repository->getById($this->normalizeCredentialId($credentialId));
+		if ($credential === null || !$credential->isServiceCredential()) {
+			throw $this->notFound();
+		}
+		return $credential;
+	}
+
+	/**
+	 * @param array<string,array<int,string>> $operationGrants
+	 * @return array<string,array<int,string>>
+	 */
+	private function normalizeOperationGrants(array $operationGrants): array {
+		if ($operationGrants === []) {
+			throw new InvalidArgumentException('Select at least one service with explicit operations.');
+		}
+		$normalized = [];
+		foreach ($operationGrants as $serviceId => $operations) {
+			if (!is_string($serviceId) || !is_array($operations) || !array_is_list($operations)) {
+				throw new InvalidArgumentException('Service operation grants must be keyed lists.');
+			}
+			$service = $this->serviceCatalog->getService($serviceId);
+			if ($service === null || $service->getOperations() === []) {
+				throw new InvalidArgumentException('The service does not declare grantable operations.');
+			}
+			$accepted = [];
+			foreach ($operations as $operation) {
+				if (!is_string($operation) || !in_array($operation, $service->getOperations(), true)) {
+					throw new InvalidArgumentException('Unknown service operation grant.');
+				}
+				$accepted[$operation] = true;
+			}
+			if ($accepted === []) {
+				throw new InvalidArgumentException('Each service credential grant requires at least one operation.');
+			}
+			$normalized[$serviceId] = array_keys($accepted);
+			sort($normalized[$serviceId], SORT_STRING);
+		}
+		ksort($normalized, SORT_STRING);
+		return $normalized;
 	}
 
 	/**
@@ -297,7 +463,7 @@ final class CredentialManagementService {
 			$this->normalizeCredentialId($credentialId),
 			$ownerUserId
 		);
-		if ($credential === null) {
+		if ($credential === null || $credential->isServiceCredential()) {
 			throw $this->notFound();
 		}
 

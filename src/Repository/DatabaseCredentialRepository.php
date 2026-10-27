@@ -3,6 +3,7 @@
 namespace KeyHarbor\Repository;
 
 use Base3\Database\Api\IDatabase;
+use CredentialFoundation\Dto\CredentialSubject;
 use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\Model\ApiCredential;
 
@@ -27,7 +28,7 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 			'INSERT INTO ' . self::TABLE_KEY . ' (' .
 				'id, public_id, owner_user_id, owner_userid, owner_name, notification_address, notification_language, label, ' .
 				'secret_hash, hmac_enabled, secret_ciphertext, secret_cipher_nonce, created_at, expires_at, revoked_at, ' .
-				'warning_notified_at, expiry_notified_at' .
+				'warning_notified_at, expiry_notified_at, subject_type, subject_id' .
 				') VALUES (' . $this->credentialValues($credential) . ')'
 		);
 		$this->insertGrants($credential);
@@ -44,14 +45,14 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 	public function getByOwner(string $id, int|string $ownerUserId): ?ApiCredential {
 		return $this->getOne(
 			'id=' . $this->quote($id) .
-			' AND owner_user_id=' . $this->quote((string)$ownerUserId)
+			' AND subject_type=\'user\' AND owner_user_id=' . $this->quote((string)$ownerUserId)
 		);
 	}
 
 	public function listByOwner(int|string $ownerUserId): array {
 		return $this->getMany(
 			'SELECT * FROM ' . self::TABLE_KEY .
-			' WHERE owner_user_id=' . $this->quote((string)$ownerUserId) .
+			' WHERE subject_type=\'user\' AND owner_user_id=' . $this->quote((string)$ownerUserId) .
 			' ORDER BY created_at DESC, id ASC'
 		);
 	}
@@ -79,7 +80,7 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 		return $this->performUpdate(
 			$credential,
 			'id=' . $this->quote($credential->getId()) .
-			' AND owner_user_id=' . $this->quote($ownerUserId)
+			' AND subject_type=\'user\' AND owner_user_id=' . $this->quote($ownerUserId)
 		);
 	}
 
@@ -105,7 +106,7 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 		return $this->performDelete(
 			$id,
 			'id=' . $this->quote($id) .
-			' AND owner_user_id=' . $this->quote($ownerUserId) .
+			' AND subject_type=\'user\' AND owner_user_id=' . $this->quote($ownerUserId) .
 			' AND revoked_at IS NOT NULL'
 		);
 	}
@@ -219,7 +220,9 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 				'expires_at=' . $this->intNullable($credential->getExpiresAt()) . ', ' .
 				'revoked_at=' . $this->intNullable($credential->getRevokedAt()) . ', ' .
 				'warning_notified_at=' . $this->intNullable($credential->getWarningNotifiedAt()) . ', ' .
-				'expiry_notified_at=' . $this->intNullable($credential->getExpiryNotifiedAt()) .
+				'expiry_notified_at=' . $this->intNullable($credential->getExpiryNotifiedAt()) . ', ' .
+				'subject_type=' . $this->quote($credential->getSubject()->getType()) . ', ' .
+				'subject_id=' . $this->quote($credential->getSubject()->getId()) .
 				' WHERE ' . $where . ' LIMIT 1'
 		);
 		$this->database->nonQuery(
@@ -261,24 +264,30 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 			$this->intNullable($credential->getExpiresAt()),
 			$this->intNullable($credential->getRevokedAt()),
 			$this->intNullable($credential->getWarningNotifiedAt()),
-			$this->intNullable($credential->getExpiryNotifiedAt())
+			$this->intNullable($credential->getExpiryNotifiedAt()),
+			$this->quote($credential->getSubject()->getType()),
+			$this->quote($credential->getSubject()->getId())
 		]);
 	}
 
 	private function insertGrants(ApiCredential $credential): void {
 		foreach ($credential->getServiceIds() as $serviceId) {
+			$operations = $credential->getOperationGrants();
+			$json = isset($operations[$serviceId])
+				? $this->quote((string)json_encode($operations[$serviceId], JSON_THROW_ON_ERROR))
+				: 'NULL';
 			$this->database->nonQuery(
-			'INSERT INTO ' . self::TABLE_GRANT . ' (credential_id, service_id, created_at) VALUES (' .
+			'INSERT INTO ' . self::TABLE_GRANT . ' (credential_id, service_id, created_at, operations_json) VALUES (' .
 				$this->quote($credential->getId()) . ', ' .
 				$this->quote($serviceId) . ', ' .
-				$credential->getCreatedAt() . ')'
+				$credential->getCreatedAt() . ', ' . $json . ')'
 			);
 		}
 	}
 
 	/**
 	 * @param array<int,string> $credentialIds
-	 * @return array<string,array<int,string>>
+	 * @return array<string,array{service_ids:array<int,string>,operation_grants?:array<string,array<int,string>>}>
 	 */
 	private function loadGrants(array $credentialIds): array {
 		if ($credentialIds === []) {
@@ -287,7 +296,7 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 
 		$quotedIds = array_map(fn(string $id): string => $this->quote($id), $credentialIds);
 		$rows = $this->database->multiQuery(
-			'SELECT credential_id, service_id FROM ' . self::TABLE_GRANT .
+			'SELECT credential_id, service_id, operations_json FROM ' . self::TABLE_GRANT .
 			' WHERE credential_id IN (' . implode(', ', $quotedIds) . ')' .
 			' ORDER BY service_id ASC'
 		);
@@ -295,7 +304,15 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 		$grants = [];
 		foreach ($rows as $row) {
 			$credentialId = (string)$row['credential_id'];
-			$grants[$credentialId][] = (string)$row['service_id'];
+			$serviceId = (string)$row['service_id'];
+			$grants[$credentialId]['service_ids'][] = $serviceId;
+			if (isset($row['operations_json']) && $row['operations_json'] !== null) {
+				$operations = json_decode((string)$row['operations_json'], true, 512, JSON_THROW_ON_ERROR);
+				if (!is_array($operations) || !array_is_list($operations)) {
+					throw new \UnexpectedValueException('Stored operation grants must be JSON lists.');
+				}
+				$grants[$credentialId]['operation_grants'][$serviceId] = $operations;
+			}
 		}
 		return $grants;
 	}
@@ -303,7 +320,12 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 	/**
 	 * @param array<int,string> $serviceIds
 	 */
-	private function fromRow(array $row, array $serviceIds): ApiCredential {
+	private function fromRow(array $row, array $grants): ApiCredential {
+		$subjectType = (string)($row['subject_type'] ?? CredentialSubject::TYPE_USER);
+		$subjectId = (string)($row['subject_id'] ?? '');
+		if ($subjectType === CredentialSubject::TYPE_USER && $subjectId === '') {
+			$subjectId = (string)$row['owner_user_id'];
+		}
 		return new ApiCredential(
 			(string)$row['id'],
 			(string)$row['public_id'],
@@ -322,7 +344,9 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 			$this->nullableInt($row['revoked_at'] ?? null),
 			$this->nullableInt($row['warning_notified_at'] ?? null),
 			$this->nullableInt($row['expiry_notified_at'] ?? null),
-			$serviceIds
+			$grants['service_ids'] ?? [],
+			new CredentialSubject($subjectType, $subjectId),
+			$grants['operation_grants'] ?? []
 		);
 	}
 

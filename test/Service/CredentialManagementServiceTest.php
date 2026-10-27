@@ -58,6 +58,42 @@ final class CredentialManagementServiceTest extends TestCase {
 		);
 	}
 
+	public function testAdminCreatesEditsAndRotatesTechnicalCredentialWithoutUserImpersonation(): void {
+		[$service, $repository] = $this->createService(true);
+		$issued = $service->createForService('contourz', 'Contourz', 'admin@example.test', 'en', null, ['example:read' => ['getEntries']]);
+		$credential = $issued->getCredential();
+		self::assertSame('service', $credential->getSubject()->getType());
+		self::assertSame('contourz', $credential->getSubject()->getId());
+		self::assertSame('42', $credential->getOwnerUserId());
+		self::assertTrue($credential->isHmacEnabled());
+		self::assertTrue($credential->hasOperation('example:read', 'getEntries'));
+		self::assertFalse($credential->hasOperation('example:read', 'getEntry'));
+		self::assertCount(1, $service->listAllForAdmin());
+		self::assertSame([], $service->listForCurrentUser());
+		$updated = $service->updateServiceAsAdmin($credential->getId(), 'Contourz production', 'admin@example.test', 'de', null, ['example:read' => ['getEntry']]);
+		self::assertFalse($updated->hasOperation('example:read', 'getEntries'));
+		self::assertTrue($updated->hasOperation('example:read', 'getEntry'));
+		$rotated = $service->rotateServiceAsAdmin($credential->getId());
+		self::assertNotSame($issued->getGeneratedToken()->getToken(), $rotated->getGeneratedToken()->getToken());
+		self::assertSame('contourz', $rotated->getCredential()->getSubject()->getId());
+		self::assertFalse($rotated->getCredential()->hasOperation('example:read', 'getEntries'));
+		self::assertTrue($service->revokeAsAdmin($credential->getId())->isRevoked());
+		$service->deleteAsAdmin($credential->getId());
+		self::assertNull($repository->getById($credential->getId()));
+	}
+
+	public function testNonAdminCannotCreateTechnicalCredential(): void {
+		[$service] = $this->createService();
+		$this->expectException(CredentialManagementException::class);
+		$service->createForService('contourz', 'Contourz', '', 'en', null, ['example:read' => ['getEntries']]);
+	}
+
+	public function testAdminRejectsUndeclaredServiceOperation(): void {
+		[$service] = $this->createService(true);
+		$this->expectException(InvalidArgumentException::class);
+		$service->createForService('contourz', 'Contourz', '', 'en', null, ['example:read' => ['deleteEntry']]);
+	}
+
 	public function testCreatesOwnerBoundBearerCredentialAndReturnsTokenOnce(): void {
 		[$service, $repository, $tokenService] = $this->createService();
 
@@ -319,8 +355,8 @@ final class ManagementTestProvider implements ICredentialServiceProvider {
 
 	public function getServices(): array {
 		return [
-			new CredentialServiceDefinition('example:read', 'Example read'),
-			new CredentialServiceDefinition('example:write', 'Example write')
+			new CredentialServiceDefinition('example:read', 'Example read', '', ['getEntries', 'getEntry']),
+			new CredentialServiceDefinition('example:write', 'Example write', '', ['deleteEntry'])
 		];
 	}
 }
@@ -349,7 +385,7 @@ final class ManagementTestRepository implements ICredentialRepository {
 
 	public function getByOwner(string $id, int|string $ownerUserId): ?ApiCredential {
 		$credential = $this->getById($id);
-		if ($credential === null || $credential->getOwnerUserId() !== (string)$ownerUserId) {
+		if ($credential === null || ($credential->isServiceCredential() || $credential->getOwnerUserId() !== (string)$ownerUserId)) {
 			return null;
 		}
 		return $credential;
@@ -358,7 +394,7 @@ final class ManagementTestRepository implements ICredentialRepository {
 	public function listByOwner(int|string $ownerUserId): array {
 		return array_values(array_filter(
 			$this->credentials,
-			fn(ApiCredential $credential): bool => $credential->getOwnerUserId() === (string)$ownerUserId
+			fn(ApiCredential $credential): bool => !$credential->isServiceCredential() && $credential->getOwnerUserId() === (string)$ownerUserId
 		));
 	}
 

@@ -6,7 +6,7 @@ This document is technical documentation and is not a legal privacy notice. The 
 
 ## Purpose and scope
 
-KeyHarbor provides durable API credentials for BASE3 services. A credential belongs to a user identity, grants one or more logical services, and can optionally expire. The plugin supports bearer tokens and HMAC-SHA256 credentials.
+KeyHarbor provides durable API credentials for BASE3 services. A credential is issued by a user and authenticates either that user or an explicitly named technical service. It grants one or more logical services and can optionally expire. The plugin supports bearer tokens and HMAC-SHA256 credentials.
 
 The component processes security-sensitive authentication material and can also process personal data because credentials are associated with user accounts and notification recipients.
 
@@ -18,7 +18,9 @@ A credential record contains:
 
 - internal credential id
 - public credential id
-- owner user id
+- owner (issuing administrator) user id
+- authenticated subject type (`user` or `service`)
+- authenticated subject identifier (stable user or service id)
 - owner login
 - owner display name
 - notification address
@@ -39,6 +41,7 @@ The grant table stores:
 - credential id
 - granted service id
 - creation timestamp
+- optional JSON list of specifically granted service operations (exact method names)
 
 Owner identifiers, login names, display names, notification addresses, and user-defined labels can be personal data.
 
@@ -131,7 +134,7 @@ The user-facing list response also returns the current user's id, login, name, e
 
 ## Ownership protection
 
-User-scoped credential management derives the owner from the current user. The client does not submit an owner id when creating or editing credentials.
+User-scoped credential management derives the owner from the current user and excludes service subjects. The client does not submit an owner id when creating or editing credentials.
 
 Repository methods for user-scoped reads and updates include `owner_user_id` in their database condition. A credential id by itself is not sufficient for user-scoped access.
 
@@ -140,7 +143,9 @@ Repository methods for user-scoped reads and updates include `owner_user_id` in 
 The administration display requires system administrator permission. Its JSON list can expose all stored credential metadata needed for administration, including:
 
 - credential id and public id
-- owner user id
+- owner (issuing administrator) user id
+- authenticated subject type (`user` or `service`)
+- authenticated subject identifier (stable user or service id)
 - owner login
 - owner display name
 - notification address and language
@@ -149,6 +154,7 @@ The administration display requires system administrator permission. Its JSON li
 - creation, expiration, revocation, and notification timestamps
 - status
 - granted service ids
+- subject type, subject id and per-service operation grants
 
 It does not expose the secret hash, encrypted HMAC secret, encryption nonce, or full plaintext token.
 
@@ -184,7 +190,9 @@ Message metadata additionally contains:
 
 - internal credential id
 - public id
-- owner user id
+- owner (issuing administrator) user id
+- authenticated subject type (`user` or `service`)
+- authenticated subject identifier (stable user or service id)
 - notification kind (`expiring` or `expired`)
 
 KeyHarbor enqueues the message through MessagingFoundation interfaces. The active messaging implementation determines queue persistence, transport selection, provider communication, delivery logs, retention, and any external transfer.
@@ -252,7 +260,9 @@ These request bodies are not explicitly logged by KeyHarbor.
 Successful authentication results can contain:
 
 - credential id
-- owner user id
+- owner (issuing administrator) user id
+- authenticated subject type (`user` or `service`)
+- authenticated subject identifier (stable user or service id)
 - service id
 - expiration timestamp
 
@@ -390,3 +400,20 @@ persist it. SettingsStore backend retention, audit logging, backup retention and
 possible external transfers depend on the project implementation and cannot be
 verified by this plugin alone. The new browser controls do not store secret
 values in browser persistent storage. Key edits must be authorized server-side.
+
+## Technical service credential extension
+
+An administrator may create, edit, rotate, revoke, and permanently delete an HMAC-only credential for a technical service subject. The credential stores a stable service identifier, an issuing administrator's account metadata, an encrypted HMAC secret, a hash verifier, and exact method grants. The service identifier and granted operation names may be confidential operational metadata and are available only to authorized administrators. A verified service subject cannot be mapped to the issuer's human session through KeyHarborAuthentication. No read permission to Memora or other domain data is implied by successful signature verification or operation grants.
+
+The administration UI shows the newly generated token only once and clears the on-screen value when the dialog closes; copying it transfers the secret to the operating-system clipboard, whose retention is outside KeyHarbor's control. A service expiry notification is directed at its configured notification recipient and links to the administrator UI; that address and any copy of the token remain subject to deployment-specific retention policies. Service credentials follow the same explicit revocation and deletion lifecycle as user credentials, and the same replay-state TTL.
+
+Migration 002 adds columns and backfills preexisting user credentials without changing their owner identity; it does not remove historic records. Existing databases, backup copies, event logs and message provider queues must follow the host's documented deletion and retention rules. No claim is made about host-specific transfer jurisdictions, exact retention schedules, or external processors, which must be verified separately in the deployed system.
+
+## Embedded administration headings (2026-10-27)
+
+The three KeyHarbor administration intro/action rows now use neutral `div` containers and
+localized `h2` headings within the host application's existing page hierarchy. Dialog headings
+and their accessible names remain unchanged; no new ARIA landmarks are added. The markup change
+does not change the credential or encryption operations, transmitted data, storage, retention,
+recipients, or access-control decisions described above. Browser and screen-reader verification
+remains necessary for the deployment; the standalone template test is not a WCAG compliance claim.

@@ -3,6 +3,7 @@
 namespace KeyHarbor\Model;
 
 use InvalidArgumentException;
+use CredentialFoundation\Dto\CredentialSubject;
 
 /**
  * Immutable persisted API credential including service grants.
@@ -13,6 +14,11 @@ final class ApiCredential {
 
 	/** @var array<int,string> */
 	private readonly array $serviceIds;
+
+	/** @var array<string,array<int,string>> */
+	private readonly array $operationGrants;
+
+	private readonly CredentialSubject $subject;
 
 	/**
 	 * @param array<int,string> $serviceIds
@@ -35,7 +41,9 @@ final class ApiCredential {
 		private readonly ?int $revokedAt,
 		private readonly ?int $warningNotifiedAt,
 		private readonly ?int $expiryNotifiedAt,
-		array $serviceIds
+		array $serviceIds,
+		?CredentialSubject $subject = null,
+		array $operationGrants = []
 	) {
 		if (!preg_match('/^[a-f0-9]{32}$/', $this->id)) {
 			throw new InvalidArgumentException('Credential ids must contain 32 lowercase hexadecimal characters.');
@@ -45,6 +53,13 @@ final class ApiCredential {
 		}
 		if (trim($this->ownerUserId) === '') {
 			throw new InvalidArgumentException('Credential owner user ids must not be empty.');
+		}
+		$this->subject = $subject ?? new CredentialSubject(CredentialSubject::TYPE_USER, $this->ownerUserId);
+		if ($this->subject->isUser() && $this->subject->getId() !== $this->ownerUserId) {
+			throw new InvalidArgumentException('A user credential subject must match the credential owner.');
+		}
+		if ($this->subject->isService() && !$this->hmacEnabled) {
+			throw new InvalidArgumentException('Service credentials require HMAC authentication.');
 		}
 		if (trim($this->label) === '') {
 			throw new InvalidArgumentException('Credential labels must not be empty.');
@@ -83,6 +98,34 @@ final class ApiCredential {
 		$serviceIds = array_keys($normalizedServiceIds);
 		sort($serviceIds, SORT_STRING);
 		$this->serviceIds = $serviceIds;
+
+		$normalizedOperations = [];
+		foreach ($operationGrants as $serviceId => $operations) {
+			if (!is_string($serviceId) || !in_array($serviceId, $serviceIds, true) || !is_array($operations)) {
+				throw new InvalidArgumentException('Operation grants must belong to selected services.');
+			}
+			$unique = [];
+			foreach ($operations as $operation) {
+				if (!is_string($operation) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $operation)) {
+					throw new InvalidArgumentException('Credential operation grants contain an invalid operation.');
+				}
+				$unique[$operation] = true;
+			}
+			if ($this->subject->isService() && $unique === []) {
+				throw new InvalidArgumentException('Service credentials require explicit operations for every service.');
+			}
+			$normalizedOperations[$serviceId] = array_keys($unique);
+			sort($normalizedOperations[$serviceId], SORT_STRING);
+		}
+		if ($this->subject->isService()) {
+			foreach ($serviceIds as $serviceId) {
+				if (!isset($normalizedOperations[$serviceId])) {
+					throw new InvalidArgumentException('Service credentials require explicit operations for every service.');
+				}
+			}
+		}
+		ksort($normalizedOperations, SORT_STRING);
+		$this->operationGrants = $normalizedOperations;
 	}
 
 	public function getId(): string {
@@ -91,6 +134,32 @@ final class ApiCredential {
 
 	public function getPublicId(): string {
 		return $this->publicId;
+	}
+
+	/**
+	 * Return the credential's authenticated principal, not the issuing administrator.
+	 */
+	public function getSubject(): CredentialSubject {
+		return $this->subject;
+	}
+
+	public function isServiceCredential(): bool {
+		return $this->subject->isService();
+	}
+
+	/** @return array<string,array<int,string>> Exact per-service operation grants. */
+	public function getOperationGrants(): array {
+		return $this->operationGrants;
+	}
+
+	public function hasOperation(string $serviceId, string $operation): bool {
+		if (!$this->hasService($serviceId)) {
+			return false;
+		}
+		if (!isset($this->operationGrants[$serviceId])) {
+			return $this->subject->isUser();
+		}
+		return in_array($operation, $this->operationGrants[$serviceId], true);
 	}
 
 	public function getOwnerUserId(): string {
@@ -180,7 +249,8 @@ final class ApiCredential {
 		string $notificationAddress,
 		string $notificationLanguage,
 		?int $expiresAt,
-		array $serviceIds
+		array $serviceIds,
+		?array $operationGrants = null
 	): self {
 		$expiryChanged = $expiresAt !== $this->expiresAt;
 
@@ -202,7 +272,9 @@ final class ApiCredential {
 			$this->revokedAt,
 			$expiryChanged ? null : $this->warningNotifiedAt,
 			$expiryChanged ? null : $this->expiryNotifiedAt,
-			$serviceIds
+			$serviceIds,
+			$this->subject,
+			$operationGrants ?? array_intersect_key($this->operationGrants, array_flip($serviceIds))
 		);
 	}
 
@@ -230,7 +302,9 @@ final class ApiCredential {
 			$this->revokedAt,
 			$this->warningNotifiedAt,
 			$this->expiryNotifiedAt,
-			$this->serviceIds
+			$this->serviceIds,
+			$this->subject,
+			$this->operationGrants
 		);
 	}
 
@@ -253,7 +327,9 @@ final class ApiCredential {
 			$revokedAt,
 			$this->warningNotifiedAt,
 			$this->expiryNotifiedAt,
-			$this->serviceIds
+			$this->serviceIds,
+			$this->subject,
+			$this->operationGrants
 		);
 	}
 }

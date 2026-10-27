@@ -6,6 +6,44 @@ use PHPUnit\Framework\TestCase;
 
 final class AjaxOnlyUiTest extends TestCase {
 
+	public function testTechnicalCredentialTranslationsExistInAllSupportedLanguages(): void {
+		$pluginRoot = dirname(__DIR__, 2);
+		$javascript = (string)file_get_contents($pluginRoot . '/assets/keyharbor/keyharboradmin.js');
+		$template = (string)file_get_contents($pluginRoot . '/tpl/Display/KeyHarborAdminDisplay.php');
+		preg_match_all('/\bt\(\x27([a-z0-9_]+)\x27/', $javascript, $jsKeys);
+		preg_match_all('/\$t\(\x27([a-z0-9_]+)\x27/', $template, $templateKeys);
+		$keys = array_unique(array_filter(array_merge($jsKeys[1], $templateKeys[1]), fn(string $key): bool => $key !== 'error_'));
+		$files = glob($pluginRoot . '/lang/Display/*.ini');
+		self::assertCount(12, $files);
+		foreach ($files as $file) {
+			$translations = parse_ini_file($file, true, INI_SCANNER_RAW);
+			self::assertIsArray($translations, basename($file));
+			$admin = $translations['keyharbor_admin_display'];
+			foreach ($keys as $key) {
+				self::assertNotEmpty($admin[$key] ?? null, basename($file) . ':' . $key);
+			}
+		}
+	}
+
+	public function testTechnicalCredentialDialogsRenderInAllSupportedLanguages(): void {
+		$pluginRoot = dirname(__DIR__, 2);
+		foreach (glob($pluginRoot . '/lang/Display/*.ini') as $file) {
+			$translations = parse_ini_file($file, true, INI_SCANNER_RAW)['keyharbor_admin_display'];
+			$renderer = new AdminTemplateRenderFixture([
+				'error' => '',
+				'translations' => $translations,
+				'service' => '/index.php?name=keyharboradmindisplay',
+				'cssUrl' => '/assets/keyharbor.css',
+				'scriptUrl' => '/assets/keyharboradmin.js'
+			]);
+			$html = $renderer->render($pluginRoot . '/tpl/Display/KeyHarborAdminDisplay.php');
+			self::assertStringContainsString('data-service-editor', $html, basename($file));
+			self::assertStringContainsString('data-service-token-dialog', $html, basename($file));
+			self::assertStringContainsString($translations['service_subject'], $html, basename($file));
+		}
+	}
+
+
 	public function testManagementTemplatesContainNoFormsSubmitControlsOrAnchors(): void {
 		$pluginRoot = dirname(__DIR__, 2);
 		$templates = [
@@ -121,5 +159,24 @@ final class AjaxOnlyUiTest extends TestCase {
 		self::assertStringContainsString("return 'encryptionprofilesdisplay'", $display);
 		self::assertStringContainsString('assets/keyharbor/encryptionprofiles.js', $display);
 		self::assertStringContainsString('IEncryptionProfileService::class', $plugin);
+	}
+}
+
+/** Minimal template fixture: templates are rendered by IMvcView in production. */
+final class AdminTemplateRenderFixture {
+
+	public array $_;
+
+	public function __construct(array $data) { $this->_ = $data; }
+
+	public function render(string $file): string {
+		ob_start();
+		try {
+			include $file;
+			return (string)ob_get_clean();
+		} catch (\Throwable $exception) {
+			ob_end_clean();
+			throw $exception;
+		}
 	}
 }

@@ -4,9 +4,19 @@ namespace KeyHarbor\Test\Migration;
 
 use Base3\Database\Api\IDatabase;
 use KeyHarbor\Migration\Migration001CreateCredentialTables;
+use KeyHarbor\Migration\Migration002CredentialSubjects;
 use PHPUnit\Framework\TestCase;
 
 final class KeyHarborMigrationTest extends TestCase {
+
+	public function testSecondMigrationAddsSubjectsAndExactOperationsWithoutEditingFirst(): void {
+		$database = new MigrationTestDatabase();
+		(new Migration002CredentialSubjects($database))->up();
+		self::assertCount(3, $database->queries);
+		self::assertStringContainsString('ADD COLUMN subject_type', $database->queries[0]);
+		self::assertStringContainsString('SET subject_id=owner_user_id', $database->queries[1]);
+		self::assertStringContainsString('ADD COLUMN operations_json', $database->queries[2]);
+	}
 
 	public function testCreatesCredentialAndGrantTables(): void {
 		$database = new MigrationTestDatabase();

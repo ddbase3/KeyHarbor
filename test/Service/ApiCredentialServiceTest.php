@@ -125,6 +125,22 @@ final class ApiCredentialServiceTest extends TestCase {
 		self::assertTrue($credential->isHmacEnabled());
 	}
 
+	public function testServiceCredentialRequiresExplicitMethodAndNeverReturnsUserId(): void {
+		[$service, $token, $credential, $signer] = $this->serviceWithCredential(['example:read'], null, null, true, true);
+		$unsigned = new HmacAuthenticationRequest($token, 'GET', '/resource', '', time(), 'technical-nonce', str_repeat('a', 64));
+		$secret = (new CredentialTokenService())->parse($token)->getSecret();
+		$request = new HmacAuthenticationRequest($token, 'GET', '/resource', '', $unsigned->getTimestamp(), 'technical-nonce', $signer->sign($unsigned, $secret));
+		$identity = $service->identifyHmac($request);
+		self::assertTrue($identity->isAuthenticated());
+		self::assertNull($identity->getUserId());
+		self::assertSame('contourz', $identity->getSubject()->getId());
+		self::assertSame(CredentialAuthenticationResult::FAILURE_OPERATION_REQUIRED, $service->authorizeService('example:read')->getFailureCode());
+		self::assertSame(CredentialAuthenticationResult::FAILURE_OPERATION_NOT_GRANTED, $service->authorizeOperation('example:read', 'deleteEntry')->getFailureCode());
+		self::assertTrue($service->authorizeOperation('example:read', 'getEntries')->isAuthenticated());
+		self::assertNull($service->authorizeOperation('example:read', 'getEntries')->getUserId());
+		self::assertSame(CredentialAuthenticationResult::FAILURE_HMAC_REQUIRED, $service->authenticateBearer($token, 'example:read')->getFailureCode());
+	}
+
 	public function testRejectsHmacForBearerOnlyCredential(): void {
 		[$service, $token] = $this->serviceWithCredential();
 		$request = new HmacAuthenticationRequest(
@@ -154,7 +170,8 @@ final class ApiCredentialServiceTest extends TestCase {
 		array $serviceIds = ['example:read'],
 		?int $expiresAt = null,
 		?int $revokedAt = null,
-		bool $hmacEnabled = false
+		bool $hmacEnabled = false,
+		bool $technical = false
 	): array {
 		$tokenService = new CredentialTokenService();
 		$generated = $tokenService->generate();
@@ -179,7 +196,9 @@ final class ApiCredentialServiceTest extends TestCase {
 			$revokedAt,
 			null,
 			null,
-			$serviceIds
+			$serviceIds,
+			$technical ? new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz') : null,
+			$technical ? ['example:read' => ['getEntries']] : []
 		);
 		$repository = new AuthenticationTestRepository([$credential]);
 		$catalog = new CredentialServiceCatalog(new AuthenticationTestClassMap([
@@ -217,8 +236,8 @@ final class AuthenticationTestProvider implements ICredentialServiceProvider {
 
 	public function getServices(): array {
 		return [
-			new CredentialServiceDefinition('example:read', 'Example read'),
-			new CredentialServiceDefinition('example:write', 'Example write')
+			new CredentialServiceDefinition('example:read', 'Example read', '', ['getEntries', 'getEntry', 'deleteEntry']),
+			new CredentialServiceDefinition('example:write', 'Example write', '', ['deleteEntry'])
 		];
 	}
 }

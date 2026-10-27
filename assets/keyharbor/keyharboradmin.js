@@ -16,6 +16,23 @@
 		const searchInput = root.querySelector('[data-filter="search"]');
 		const statusSelect = root.querySelector('[data-filter="status"]');
 		const state = { credentials: [], services: [] };
+		const serviceEditor = root.querySelector('[data-service-editor]');
+		const serviceEditorTitle = root.querySelector('[data-service-editor-title]');
+		const serviceEditorError = root.querySelector('[data-service-editor-error]');
+		const serviceOperations = root.querySelector('[data-service-operations]');
+		const serviceSave = root.querySelector('[data-service-save]');
+		const tokenDialog = root.querySelector('[data-service-token-dialog]');
+		const tokenValue = root.querySelector('[data-service-token-value]');
+		const copyStatus = root.querySelector('[data-service-copy-status]');
+		const fields = {
+			id: root.querySelector('[data-service-field="credential_id"]'),
+			subject: root.querySelector('[data-service-field="subject_id"]'),
+			label: root.querySelector('[data-service-field="label"]'),
+			address: root.querySelector('[data-service-field="notification_address"]'),
+			language: root.querySelector('[data-service-field="notification_language"]'),
+			expiresEnabled: root.querySelector('[data-service-field="expires_enabled"]'),
+			expiresAt: root.querySelector('[data-service-field="expires_at"]')
+		};
 
 		async function postJson(payload) {
 			const response = await fetch(serviceUrl, {
@@ -31,7 +48,7 @@
 			const text = await response.text();
 			let data;
 			try { data = JSON.parse(text); }
-			catch(error) { throw new Error(t('invalid_response', 'KeyHarbor returned an invalid response.')); }
+			catch(error) { throw new Error(t('invalid_response')); }
 			if(!response.ok || !data || data.ok !== true) {
 				throw new Error(responseError(data));
 			}
@@ -46,7 +63,7 @@
 				state.services = Array.isArray(response.services) ? response.services : [];
 				renderSummary();
 				renderTable();
-				if(showMessage) { setNotice(t('refreshed', 'Credential list refreshed.'), 'success'); }
+				if(showMessage) { setNotice(t('refreshed'), 'success'); }
 			}
 			catch(error) {
 				setNotice(errorMessage(error), 'error');
@@ -64,10 +81,10 @@
 				if(counts[credential.status] !== undefined) { counts[credential.status]++; }
 			});
 			[
-				[t('summary_total', 'Total'), counts.total],
-				[t('status_active', 'Active'), counts.active],
-				[t('status_expired', 'Expired'), counts.expired],
-				[t('status_revoked', 'Revoked'), counts.revoked]
+				[t('summary_total'), counts.total],
+				[t('status_active'), counts.active],
+				[t('status_expired'), counts.expired],
+				[t('status_revoked'), counts.revoked]
 			].forEach(([label, value]) => {
 				const card = element('div', 'keyharbor-summary-card');
 				card.appendChild(textElement('strong', value));
@@ -90,6 +107,8 @@
 					credential.owner_login,
 					credential.owner_name,
 					credential.notification_address,
+					credential.subject_type,
+					credential.subject_id,
 					...(Array.isArray(credential.service_ids) ? credential.service_ids : [])
 				].join(' ').toLowerCase();
 				return haystack.includes(search);
@@ -104,16 +123,20 @@
 		function createRow(credential) {
 			const row = document.createElement('tr');
 			const credentialCell = document.createElement('td');
-			credentialCell.appendChild(textElement('strong', credential.label || t('unnamed_credential', 'Unnamed credential')));
+			credentialCell.appendChild(textElement('strong', credential.label || t('unnamed_credential')));
 			credentialCell.appendChild(document.createElement('br'));
 			credentialCell.appendChild(textElement('code', credential.public_id || ''));
+			if(credential.subject_type === 'service') {
+				credentialCell.appendChild(document.createElement('br'));
+				credentialCell.appendChild(textElement('small', t('service_kind') + ': ' + String(credential.subject_id || '')));
+			}
 			row.appendChild(credentialCell);
 
 			const ownerCell = document.createElement('td');
 			const owner = element('div', 'keyharbor-owner');
-			owner.appendChild(textElement('strong', credential.owner_name || credential.owner_login || credential.owner_user_id || t('unknown', 'Unknown')));
+			owner.appendChild(textElement('strong', credential.owner_name || credential.owner_login || credential.owner_user_id || t('unknown')));
 			owner.appendChild(textElement('small', (credential.owner_login || '') + ' · ID ' + (credential.owner_user_id || '')));
-			owner.appendChild(textElement('small', credential.notification_address || t('no_notification_address', 'No notification address')));
+			owner.appendChild(textElement('small', credential.notification_address || t('no_notification_address')));
 			ownerCell.appendChild(owner);
 			row.appendChild(ownerCell);
 
@@ -132,11 +155,25 @@
 			servicesCell.appendChild(chips);
 			row.appendChild(servicesCell);
 
-			row.appendChild(textElement('td', credential.expires_at ? formatDate(credential.expires_at) : t('permanent', 'Permanent')));
+			row.appendChild(textElement('td', credential.expires_at ? formatDate(credential.expires_at) : t('permanent')));
 
 			const actionCell = element('td', 'keyharbor-table-actions');
 			const revoked = credential.status === 'revoked';
-			const button = textElement('button', revoked ? t('delete', 'Delete') : t('revoke', 'Revoke'), 'keyharbor-button');
+			if(credential.subject_type === 'service' && !revoked) {
+				const edit = textElement('button', t('edit_service'), 'keyharbor-button');
+				edit.type = 'button';
+				edit.dataset.action = 'edit-service';
+				edit.dataset.credentialId = credential.id || '';
+				actionCell.appendChild(edit);
+				if(credential.status === 'active') {
+					const rotate = textElement('button', t('rotate_service'), 'keyharbor-button');
+					rotate.type = 'button';
+					rotate.dataset.action = 'rotate-service';
+					rotate.dataset.credentialId = credential.id || '';
+					actionCell.appendChild(rotate);
+				}
+			}
+			const button = textElement('button', revoked ? t('delete') : t('revoke'), 'keyharbor-button');
 			button.classList.add('keyharbor-button-danger');
 			button.type = 'button';
 			button.dataset.action = revoked ? 'delete' : 'revoke';
@@ -149,17 +186,17 @@
 		async function revoke(credentialId) {
 			const credential = state.credentials.find((item) => String(item.id || '') === String(credentialId));
 			if(!credential || !window.confirm(formatText(
-				t('confirm_revoke', 'Revoke \"{credential}\" for {owner}?'),
+				t('confirm_revoke'),
 				{
-					credential: credential.label || t('credential_fallback', 'credential'),
-					owner: credential.owner_name || credential.owner_login || t('user_fallback', 'this user')
+					credential: credential.label || t('credential_fallback'),
+					owner: credential.owner_name || credential.owner_login || t('user_fallback')
 				}
 			))) { return; }
 			try {
-				setNotice(t('revoking', 'Revoking credential…'), 'info');
+				setNotice(t('revoking'), 'info');
 				await postJson({ mode: 'revoke', credential_id: credentialId });
 				await load(false);
-				setNotice(t('revoked_success', 'Credential revoked.'), 'success');
+				setNotice(t('revoked_success'), 'success');
 			}
 			catch(error) { setNotice(errorMessage(error), 'error'); }
 		}
@@ -167,25 +204,160 @@
 		async function deleteCredential(credentialId) {
 			const credential = state.credentials.find((item) => String(item.id || '') === String(credentialId));
 			if(!credential || credential.status !== 'revoked' || !window.confirm(formatText(
-				t('confirm_delete', 'Permanently delete \"{credential}\" for {owner}? This removes the credential and its grants.'),
+				t('confirm_delete'),
 				{
-					credential: credential.label || t('credential_fallback', 'credential'),
-					owner: credential.owner_name || credential.owner_login || t('user_fallback', 'this user')
+					credential: credential.label || t('credential_fallback'),
+					owner: credential.owner_name || credential.owner_login || t('user_fallback')
 				}
 			))) { return; }
 			try {
-				setNotice(t('deleting', 'Deleting credential…'), 'info');
+				setNotice(t('deleting'), 'info');
 				await postJson({ mode: 'delete', credential_id: credentialId });
 				state.credentials = state.credentials.filter((item) => String(item.id || '') !== String(credentialId));
 				renderSummary();
 				renderTable();
-				setNotice(t('deleted_success', 'Credential deleted.'), 'success');
+				setNotice(t('deleted_success'), 'success');
 			}
 			catch(error) {
 				await load(false);
 				setNotice(errorMessage(error), 'error');
 			}
 		}
+
+		function openServiceEditor(credential) {
+			const existing = credential && credential.subject_type === 'service';
+			serviceEditorError.hidden = true;
+			serviceEditorError.textContent = '';
+			fields.id.value = existing ? String(credential.id) : '';
+			fields.subject.value = existing ? String(credential.subject_id) : '';
+			fields.subject.disabled = existing;
+			fields.label.value = existing ? String(credential.label || '') : '';
+			fields.address.value = existing ? String(credential.notification_address || '') : '';
+			fields.language.value = existing ? String(credential.notification_language || '') : 'en';
+			fields.expiresEnabled.checked = existing && credential.expires_at !== null;
+			fields.expiresAt.disabled = !fields.expiresEnabled.checked;
+			fields.expiresAt.value = fields.expiresEnabled.checked ? toLocalDateTime(credential.expires_at) : '';
+			serviceEditorTitle.textContent = existing ? t('edit_service_title') : t('create_service');
+			renderOperationOptions(existing ? credential.operation_grants : {});
+			serviceEditor.showModal();
+			fields.label.focus();
+		}
+
+		function renderOperationOptions(grants) {
+			serviceOperations.textContent = '';
+			let count = 0;
+			state.services.forEach((service) => {
+				const operations = Array.isArray(service.operations) ? service.operations : [];
+				if(!operations.length) { return; }
+				const id = String(service.service_id || '');
+				if(!id) { return; }
+				const fieldset = element('fieldset', 'keyharbor-service-fieldset');
+				fieldset.appendChild(textElement('legend', service.label || id));
+				if(service.description) { fieldset.appendChild(textElement('small', service.description)); }
+				operations.forEach((operation) => {
+					const option = element('label', 'keyharbor-service-option');
+					const checkbox = document.createElement('input');
+					checkbox.type = 'checkbox';
+					checkbox.dataset.operationGrant = '1';
+					checkbox.dataset.serviceId = id;
+					checkbox.value = String(operation);
+					checkbox.checked = Array.isArray(grants && grants[id]) && grants[id].includes(operation);
+					option.appendChild(checkbox);
+					option.appendChild(textElement('span', String(operation)));
+					fieldset.appendChild(option);
+					count++;
+				});
+				serviceOperations.appendChild(fieldset);
+			});
+			if(!count) {
+				serviceOperations.appendChild(textElement('p', t('service_no_operations')));
+			}
+		}
+
+		async function saveServiceEditor() {
+			serviceEditorError.hidden = true;
+			serviceEditorError.textContent = '';
+			if(!fields.label.value.trim() || !fields.subject.value.trim()) {
+				showEditorError(t('service_required_fields'));
+				return;
+			}
+			const grants = {};
+			serviceOperations.querySelectorAll('[data-operation-grant]:checked').forEach((checkbox) => {
+				const id = checkbox.dataset.serviceId;
+				if(!grants[id]) { grants[id] = []; }
+				grants[id].push(checkbox.value);
+			});
+			if(!Object.keys(grants).length) {
+				showEditorError(t('service_select_operations'));
+				return;
+			}
+			const expiresAt = fields.expiresEnabled.checked ? Math.floor(new Date(fields.expiresAt.value).getTime() / 1000) : null;
+			if(fields.expiresEnabled.checked && (!Number.isFinite(expiresAt) || expiresAt <= 0 || !fields.address.value.trim())) {
+				showEditorError(t('service_invalid_expiration'));
+				return;
+			}
+			const creating = !fields.id.value;
+			const payload = {
+				mode: creating ? 'create_service' : 'update_service',
+				credential_id: fields.id.value,
+				subject_id: fields.subject.value.trim(),
+				label: fields.label.value.trim(),
+				notification_address: fields.address.value.trim(),
+				notification_language: fields.language.value.trim(),
+				expires_at: expiresAt,
+				operation_grants: grants
+			};
+			serviceSave.disabled = true;
+			try {
+				const response = await postJson(payload);
+				serviceEditor.close();
+				await load(false);
+				if(response.token) { showServiceToken(response.token); }
+				setNotice(creating ? t('service_created') : t('service_updated'), 'success');
+			}
+			catch(error) { showEditorError(errorMessage(error)); }
+			finally { serviceSave.disabled = false; }
+		}
+
+		function showEditorError(message) {
+			serviceEditorError.textContent = message;
+			serviceEditorError.hidden = false;
+		}
+
+		async function rotateService(credentialId) {
+			const credential = state.credentials.find((entry) => entry.id === credentialId && entry.subject_type === 'service');
+			if(!credential || credential.status !== 'active') { return; }
+			if(!window.confirm(formatText(t('service_confirm_rotate'), { credential: credential.label }))) { return; }
+			try {
+				const response = await postJson({ mode: 'rotate_service', credential_id: credentialId });
+				await load(false);
+				showServiceToken(response.token);
+				setNotice(t('service_rotated'), 'success');
+			}
+			catch(error) { setNotice(errorMessage(error), 'error'); }
+		}
+
+		function showServiceToken(token) {
+			tokenValue.textContent = String(token);
+			copyStatus.textContent = '';
+			tokenDialog.showModal();
+			tokenValue.focus();
+		}
+
+		function toLocalDateTime(timestamp) {
+			const date = new Date(Number(timestamp) * 1000);
+			const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+			return local.toISOString().slice(0, 16);
+		}
+
+		fields.expiresEnabled.addEventListener('change', () => {
+			fields.expiresAt.disabled = !fields.expiresEnabled.checked;
+			if(!fields.expiresEnabled.checked) { fields.expiresAt.value = ''; }
+		});
+		tokenDialog.addEventListener('close', () => {
+			tokenValue.textContent = '';
+			copyStatus.textContent = '';
+		});
 
 		function serviceById(serviceId) {
 			return state.services.find((service) => String(service.service_id || '') === String(serviceId)) || null;
@@ -194,9 +366,9 @@
 		function statusBadge(status) {
 			const normalized = ['active', 'expired', 'revoked'].includes(status) ? status : 'active';
 			const labels = {
-				active: t('status_active', 'Active'),
-				expired: t('status_expired', 'Expired'),
-				revoked: t('status_revoked', 'Revoked')
+				active: t('status_active'),
+				expired: t('status_expired'),
+				revoked: t('status_revoked')
 			};
 			const badge = textElement('span', labels[normalized], 'keyharbor-badge');
 			badge.classList.add('keyharbor-badge-' + normalized);
@@ -238,9 +410,10 @@
 			catch(error) { return fallback; }
 		}
 
-		function t(key, fallback) {
+		function t(key) {
 			const value = strings && typeof strings[key] === 'string' ? strings[key].trim() : '';
-			return value || fallback;
+			if(!value) { throw new Error('Missing KeyHarbor translation: ' + key); }
+			return value;
 		}
 
 		function formatText(text, values) {
@@ -252,20 +425,37 @@
 		function responseError(data) {
 			const code = data && data.error_code ? String(data.error_code) : '';
 			if(code === 'internal_error') {
-				return formatText(t('error_internal', 'The request failed. Reference: {id}'), { id: data && data.error_id ? data.error_id : '-' });
+				return formatText(t('error_internal'), { id: data && data.error_id ? data.error_id : '-' });
 			}
 			const localized = code ? t('error_' + code, '') : '';
-			return localized || t('request_failed', 'KeyHarbor admin request failed.');
+			return localized || t('request_failed');
 		}
 
 		function errorMessage(error) {
-			return error && error.message ? String(error.message) : String(error || t('unknown_error', 'Unknown error'));
+			return error && error.message ? String(error.message) : String(error || t('unknown_error'));
 		}
 
 		root.addEventListener('click', (event) => {
 			const button = event.target.closest('[data-action]');
 			if(!button || !root.contains(button)) { return; }
 			if(button.dataset.action === 'refresh') { load(true); }
+			if(button.dataset.action === 'create-service') { openServiceEditor(null); }
+			if(button.dataset.action === 'edit-service') {
+				const credential = state.credentials.find((item) => item.id === button.dataset.credentialId);
+				if(credential && credential.subject_type === 'service') { openServiceEditor(credential); }
+			}
+			if(button.dataset.action === 'rotate-service') { rotateService(button.dataset.credentialId || ''); }
+			if(button.dataset.action === 'close-service-editor') { serviceEditor.close(); }
+			if(button.dataset.action === 'save-service') { saveServiceEditor(); }
+			if(button.dataset.action === 'close-service-token') { tokenDialog.close(); }
+			if(button.dataset.action === 'copy-service-token') {
+				if(navigator.clipboard && tokenValue.textContent) {
+					navigator.clipboard.writeText(tokenValue.textContent).then(
+						() => { copyStatus.textContent = t('service_token_copied'); },
+						() => { copyStatus.textContent = t('service_token_copy_failed'); }
+					);
+				} else { copyStatus.textContent = t('service_token_copy_failed'); }
+			}
 			if(button.dataset.action === 'revoke') { revoke(button.dataset.credentialId || ''); }
 			if(button.dataset.action === 'delete') { deleteCredential(button.dataset.credentialId || ''); }
 		});

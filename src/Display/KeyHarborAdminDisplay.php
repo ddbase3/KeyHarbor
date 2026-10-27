@@ -11,6 +11,7 @@ use Base3\Logger\Api\ILogger;
 use CredentialFoundation\Dto\CredentialServiceDefinition;
 use InvalidArgumentException;
 use KeyHarbor\Exception\CredentialManagementException;
+use KeyHarbor\Dto\IssuedCredential;
 use KeyHarbor\Model\ApiCredential;
 use KeyHarbor\Service\CredentialManagementService;
 use Throwable;
@@ -51,9 +52,10 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		$translations = $this->view->getBricks('keyharbor_admin_display');
 		$translations = is_array($translations) ? $translations : [];
 		$help = trim((string)($translations['help'] ?? ''));
-		return $help !== ''
-			? $help
-			: 'Review, revoke and delete revoked KeyHarbor credentials as a system administrator.';
+		if ($help === '') {
+			throw new \UnexpectedValueException('Missing KeyHarbor translation: help');
+		}
+		return $help;
 	}
 
 	private function handleHtml(): string {
@@ -68,13 +70,13 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		} catch (CredentialManagementException $exception) {
 			$error = trim((string)($translations['error_' . $exception->getReason()] ?? ''));
 			if ($error === '') {
-				$error = $exception->getMessage();
+				$error = (string)($translations['request_failed'] ?? '');
 			}
 		} catch (Throwable $throwable) {
 			$this->logFailure('KeyHarbor admin display failed.', $throwable);
 			$error = trim((string)($translations['unavailable_error'] ?? ''));
 			if ($error === '') {
-				$error = 'KeyHarbor administration is currently unavailable.';
+				throw new \UnexpectedValueException('Missing KeyHarbor translation: unavailable_error');
 			}
 		}
 
@@ -162,6 +164,40 @@ final class KeyHarborAdminDisplay implements IDisplay {
 			];
 		}
 
+		if ($mode === 'create_service') {
+			$issued = $this->managementService->createForService(
+				$this->readString($payload, 'subject_id'),
+				$this->readString($payload, 'label'),
+				$this->readString($payload, 'notification_address'),
+				$this->readString($payload, 'notification_language'),
+				$this->readNullableTimestamp($payload, 'expires_at'),
+				$this->readOperationGrants($payload)
+			);
+			return $this->issuedResponse('created', $issued);
+		}
+
+		if ($mode === 'update_service') {
+			$credential = $this->managementService->updateServiceAsAdmin(
+				$this->readString($payload, 'credential_id'),
+				$this->readString($payload, 'label'),
+				$this->readString($payload, 'notification_address'),
+				$this->readString($payload, 'notification_language'),
+				$this->readNullableTimestamp($payload, 'expires_at'),
+				$this->readOperationGrants($payload)
+			);
+			return [
+				'ok' => true,
+				'action' => 'updated',
+				'credential' => $this->credentialToArray($credential)
+			];
+		}
+
+		if ($mode === 'rotate_service') {
+			return $this->issuedResponse('rotated', $this->managementService->rotateServiceAsAdmin(
+				$this->readString($payload, 'credential_id')
+			));
+		}
+
 		if ($mode === 'revoke') {
 			$credential = $this->managementService->revokeAsAdmin(
 				$this->readString($payload, 'credential_id')
@@ -186,6 +222,16 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		throw new InvalidArgumentException('Unsupported KeyHarbor admin mode: ' . $mode);
 	}
 
+	/** @return array<string,mixed> One-time token response, never persisted in the browser. */
+	private function issuedResponse(string $action, IssuedCredential $issued): array {
+		return [
+			'ok' => true,
+			'action' => $action,
+			'credential' => $this->credentialToArray($issued->getCredential()),
+			'token' => $issued->getGeneratedToken()->getToken()
+		];
+	}
+
 	/**
 	 * @return array<string,mixed>
 	 */
@@ -202,6 +248,9 @@ final class KeyHarborAdminDisplay implements IDisplay {
 			'id' => $credential->getId(),
 			'public_id' => $credential->getPublicId(),
 			'label' => $credential->getLabel(),
+			'subject_type' => $credential->getSubject()->getType(),
+			'subject_id' => $credential->getSubject()->getId(),
+			'operation_grants' => $credential->getOperationGrants(),
 			'owner_user_id' => $credential->getOwnerUserId(),
 			'owner_login' => $credential->getOwnerLogin(),
 			'owner_name' => $credential->getOwnerName(),
@@ -224,6 +273,37 @@ final class KeyHarborAdminDisplay implements IDisplay {
 	private function readString(array $payload, string $key, string $default = ''): string {
 		$value = $payload[$key] ?? $default;
 		return is_scalar($value) ? trim((string)$value) : $default;
+	}
+
+	/** @param array<string,mixed> $payload */
+	private function readNullableTimestamp(array $payload, string $key): ?int {
+		$value = $payload[$key] ?? null;
+		if ($value === null || $value === '') {
+			return null;
+		}
+		if (!is_int($value) && !(is_string($value) && ctype_digit($value))) {
+			throw new InvalidArgumentException('Credential expiration must be a Unix timestamp or null.');
+		}
+		return (int)$value;
+	}
+
+	/**
+	 * @param array<string,mixed> $payload
+	 * @return array<string,array<int,string>>
+	 */
+	private function readOperationGrants(array $payload): array {
+		$raw = $payload['operation_grants'] ?? null;
+		if (!is_array($raw) || array_is_list($raw)) {
+			throw new InvalidArgumentException('Service operation grants must be a keyed object.');
+		}
+		$grants = [];
+		foreach ($raw as $serviceId => $operations) {
+			if (!is_string($serviceId) || !is_array($operations) || !array_is_list($operations)) {
+				throw new InvalidArgumentException('Service operation grants must be keyed lists.');
+			}
+			$grants[$serviceId] = $operations;
+		}
+		return $grants;
 	}
 
 	private function assertAjaxJsonRequest(): void {

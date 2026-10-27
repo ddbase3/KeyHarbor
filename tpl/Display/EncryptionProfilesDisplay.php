@@ -8,10 +8,10 @@ $t = static fn(string $key): string => (string)($translations[$key] ?? '');
 <section class="keyharbor-app keyharbor-encryption" data-keyharbor-encryption
 	data-service-url="<?php echo $e($this->_['service']); ?>"
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>">
-	<header class="keyharbor-hero">
+	<div class="keyharbor-hero">
 		<div>
 			<p class="keyharbor-eyebrow"><?php echo $e($t('eyebrow')); ?></p>
-			<h1><?php echo $e($t('title')); ?></h1>
+			<h2><?php echo $e($t('title')); ?></h2>
 			<p class="keyharbor-lead"><?php echo $e($t('lead')); ?></p>
 		</div>
 		<?php if ($errorCode === ''): ?>
@@ -20,7 +20,7 @@ $t = static fn(string $key): string => (string)($translations[$key] ?? '');
 				<button type="button" class="keyharbor-button keyharbor-button-primary" data-action="create"><?php echo $e($t('create')); ?></button>
 			</div>
 		<?php endif; ?>
-	</header>
+	</div>
 	<?php if ($errorCode !== ''): ?>
 		<div role="alert" class="keyharbor-alert keyharbor-alert-error"><?php echo $e($t('error_' . $errorCode)); ?></div>
 	<?php else: ?>

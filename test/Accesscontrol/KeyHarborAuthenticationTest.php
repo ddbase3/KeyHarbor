@@ -56,6 +56,23 @@ final class KeyHarborAuthenticationTest extends TestCase {
 		self::assertSame(0, $authentication->login());
 	}
 
+	public function testAuthenticatedServiceSubjectNeverBecomesHumanSession(): void {
+		$access = new AuthenticationTestCredentialAccess(
+			CredentialIdentityResult::success(
+				'credential-service',
+				null,
+				null,
+				new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz')
+			)
+		);
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer b3k_fake_token']),
+			$access
+		);
+		self::assertSame(0, $authentication->login());
+		self::assertSame(0, $access->serviceAuthorizations);
+	}
+
 	public function testBuildsHmacRequestFromHttpRequest(): void {
 		$access = new AuthenticationTestCredentialAccess(
 			CredentialIdentityResult::success('credential-1', 42)

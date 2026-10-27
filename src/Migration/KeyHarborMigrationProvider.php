@@ -25,7 +25,8 @@ final class KeyHarborMigrationProvider implements IDatabaseMigrationProvider {
 
 	public function getMigrations(): array {
 		return [
-			Migration001CreateCredentialTables::class
+			Migration001CreateCredentialTables::class,
+			Migration002CredentialSubjects::class
 		];
 	}
 }

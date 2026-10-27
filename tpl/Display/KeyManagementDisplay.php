@@ -19,16 +19,16 @@ $t = static fn(string $key, string $fallback): string => trim((string)($translat
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 	data-profile="<?php echo $e((string)json_encode($profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 >
-	<header class="keyharbor-hero">
+	<div class="keyharbor-hero">
 		<div>
 			<p class="keyharbor-eyebrow">KeyHarbor</p>
-			<h1><?php echo $e($t('title', 'My API credentials')); ?></h1>
+			<h2><?php echo $e($t('title', 'My API credentials')); ?></h2>
 			<p class="keyharbor-lead"><?php echo $e($t('lead', 'Create scoped credentials for BASE3 services. Plaintext tokens are shown once and cannot be recovered later.')); ?></p>
 		</div>
 		<div class="keyharbor-hero-actions">
 			<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="create"><?php echo $e($t('create', 'Create credential')); ?></button>
 		</div>
-	</header>
+	</div>
 
 	<?php if ($error !== ''): ?>
 		<div class="keyharbor-alert keyharbor-alert-error" role="alert">
