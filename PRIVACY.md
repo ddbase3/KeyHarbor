@@ -140,6 +140,11 @@ Repository methods for user-scoped reads and updates include `owner_user_id` in 
 
 ## Administration data
 
+The dedicated `keyharborserviceadmindisplay` reuses the existing authenticated
+administrator API and authorization. It lists technical service credentials only,
+without introducing a separate dataset or additional disclosure recipients.
+The general administrator overview remains available.
+
 The administration display requires system administrator permission. Its JSON list can expose all stored credential metadata needed for administration, including:
 
 - credential id and public id

@@ -4,6 +4,7 @@ $serviceUrl = (string)($this->_['service'] ?? '');
 $cssUrl = (string)($this->_['cssUrl'] ?? '');
 $scriptUrl = (string)($this->_['scriptUrl'] ?? '');
 $translations = is_array($this->_['translations'] ?? null) ? $this->_['translations'] : [];
+$serviceOnly = (bool)($this->_['serviceOnly'] ?? false);
 $e = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $t = static function(string $key) use ($translations): string {
 	if (!isset($translations[$key]) || trim((string)$translations[$key]) === '') {
@@ -18,15 +19,16 @@ $t = static function(string $key) use ($translations): string {
 <section
 	class="keyharbor-app"
 	data-keyharbor-admin
+	data-service-only="<?php echo $serviceOnly ? '1' : '0'; ?>"
 	data-service-url="<?php echo $e($serviceUrl); ?>"
 	data-dialog-url="<?php echo $e($this->_['dialogJsUrl']); ?>"
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 >
 	<div class="keyharbor-hero">
 		<div>
-			<p class="keyharbor-eyebrow"><?php echo $e($t('eyebrow')); ?></p>
-			<h2><?php echo $e($t('title')); ?></h2>
-			<p class="keyharbor-lead"><?php echo $e($t('lead')); ?></p>
+			<p class="keyharbor-eyebrow"><?php echo $e($t($serviceOnly ? 'service_page_eyebrow' : 'eyebrow')); ?></p>
+			<h2><?php echo $e($t($serviceOnly ? 'service_page_title' : 'title')); ?></h2>
+			<p class="keyharbor-lead"><?php echo $e($t($serviceOnly ? 'service_page_lead' : 'lead')); ?></p>
 		</div>
 		<div class="keyharbor-hero-actions">
 			<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="create-service"><?php echo $e($t('create_service')); ?></button>
@@ -75,8 +77,8 @@ $t = static function(string $key) use ($translations): string {
 			</table>
 		</div>
 		<div class="keyharbor-empty" data-empty hidden>
-			<h2><?php echo $e($t('empty_title')); ?></h2>
-			<p><?php echo $e($t('empty_text')); ?></p>
+			<h2><?php echo $e($t($serviceOnly ? 'service_page_empty_title' : 'empty_title')); ?></h2>
+			<p><?php echo $e($t($serviceOnly ? 'service_page_empty_text' : 'empty_text')); ?></p>
 		</div>
 	<?php endif; ?>
 	<?php if ($error === ''): ?>

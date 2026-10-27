@@ -137,6 +137,24 @@ API Credentials
   All Credentials
 ```
 
+## Dedicated technical-service credential display
+
+Technical HMAC identities can be administered independently of user API credentials
+through the discoverable `keyharborserviceadmindisplay`. This view reuses
+`KeyHarborAdminDisplay`'s server-side `IAuthorizationService` check, AJAX modes,
+service operation catalog, templates and ClientStack `createStandardDialog()`.
+Its list shows only technical (`service`) subjects. The existing
+`keyharboradmindisplay` remains an administrator overview of all credentials and
+retains its existing service-credential creation button. No new credential storage,
+permissions or HTTP API is introduced.
+
+The host's admin page configuration controls tab placement. For XRM, add a
+subdisplay named `keyharborserviceadmindisplay` under the existing Credentials
+admin tab, preserving all other entries (including optional demo displays).
+KeyHarbor owns localized navigation labels in `lang/Administration/`.
+If not added as a tab, the discoverable display is still available through the
+normal BASE3 output route `name=keyharborserviceadmindisplay&out=html`.
+
 ## Service providers
 
 Consumer plugins expose protected services by implementing

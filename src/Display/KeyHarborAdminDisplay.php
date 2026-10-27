@@ -19,7 +19,7 @@ use Throwable;
 /**
  * Lets system administrators review, revoke and delete revoked credentials.
  */
-final class KeyHarborAdminDisplay implements IDisplay {
+class KeyHarborAdminDisplay implements IDisplay {
 
 	public function __construct(
 		private readonly IRequest $request,
@@ -32,6 +32,11 @@ final class KeyHarborAdminDisplay implements IDisplay {
 
 	public static function getName(): string {
 		return 'keyharboradmindisplay';
+	}
+
+	/** Scope the dedicated technical-credentials view without duplicating its administration. */
+	protected function isServiceOnly(): bool {
+		return false;
 	}
 
 	public function setData($data) {
@@ -51,9 +56,10 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		$this->view->loadBricks('Display');
 		$translations = $this->view->getBricks('keyharbor_admin_display');
 		$translations = is_array($translations) ? $translations : [];
-		$help = trim((string)($translations['help'] ?? ''));
+		$helpKey = $this->isServiceOnly() ? 'service_page_help' : 'help';
+		$help = trim((string)($translations[$helpKey] ?? ''));
 		if ($help === '') {
-			throw new \UnexpectedValueException('Missing KeyHarbor translation: help');
+			throw new \UnexpectedValueException('Missing KeyHarbor translation: ' . $helpKey);
 		}
 		return $help;
 	}
@@ -83,10 +89,11 @@ final class KeyHarborAdminDisplay implements IDisplay {
 		$this->view->setTemplate('Display/KeyHarborAdminDisplay.php');
 		$this->view->assign('error', $error);
 		$this->view->assign('translations', $translations);
+		$this->view->assign('serviceOnly', $this->isServiceOnly());
 		$this->view->assign(
 			'service',
 			$this->linkTargetService->getLink([
-				'name' => self::getName(),
+				'name' => static::getName(),
 				'out' => 'json'
 			])
 		);
@@ -154,6 +161,11 @@ final class KeyHarborAdminDisplay implements IDisplay {
 
 		if ($mode === 'list') {
 			$credentials = $this->managementService->listAllForAdmin();
+			if ($this->isServiceOnly()) {
+				$credentials = array_values(array_filter($credentials,
+					static fn(ApiCredential $credential): bool => $credential->isServiceCredential()
+				));
+			}
 			return [
 				'ok' => true,
 				'services' => array_map(
