@@ -5,8 +5,10 @@ $e = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBS
 $t = static fn(string $key): string => (string)($translations[$key] ?? '');
 ?>
 <link rel="stylesheet" href="<?php echo $e($this->_['cssUrl']); ?>">
+<link rel="stylesheet" href="<?php echo $e($this->_['dialogCssUrl']); ?>">
 <section class="keyharbor-app keyharbor-encryption" data-keyharbor-encryption
 	data-service-url="<?php echo $e($this->_['service']); ?>"
+	data-dialog-url="<?php echo $e($this->_['dialogJsUrl']); ?>"
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>">
 	<div class="keyharbor-hero">
 		<div>
@@ -51,30 +53,22 @@ $t = static fn(string $key): string => (string)($translations[$key] ?? '');
 			</div>
 			<p class="keyharbor-empty" data-targets-empty hidden><?php echo $e($t('targets_empty')); ?></p>
 		</div>
-		<dialog class="keyharbor-dialog" data-editor aria-labelledby="kh-encryption-editor-title">
-			<div class="keyharbor-dialog-surface">
-				<header class="keyharbor-dialog-header"><h2 id="kh-encryption-editor-title" data-editor-title></h2></header>
-				<div class="keyharbor-alert" role="alert" aria-live="assertive" data-editor-notice hidden></div>
-				<div class="keyharbor-dialog-body">
-					<div class="keyharbor-form-row">
-						<label class="keyharbor-field"><span><?php echo $e($t('id')); ?></span><input data-field="id" maxlength="128" autocomplete="off" required></label>
-						<label class="keyharbor-field"><span><?php echo $e($t('label')); ?></span><input data-field="label" maxlength="200" required></label>
-					</div>
-					<div class="keyharbor-form-row">
-						<label class="keyharbor-field"><span><?php echo $e($t('method')); ?></span><select data-field="method"></select></label>
-						<label class="keyharbor-field"><span><?php echo $e($t('active_key')); ?></span><select data-field="key_id"></select></label>
-					</div>
-					<h3><?php echo $e($t('keys_title')); ?></h3>
-					<p class="keyharbor-lead"><?php echo $e($t('keys_help')); ?></p>
-					<div data-key-list></div>
-					<button type="button" class="keyharbor-button" data-action="add-key"><?php echo $e($t('add_key')); ?></button>
-				</div>
-				<footer class="keyharbor-dialog-footer">
-					<button type="button" class="keyharbor-button" data-action="cancel"><?php echo $e($t('cancel')); ?></button>
-					<button type="button" class="keyharbor-button keyharbor-button-primary" data-action="save"><?php echo $e($t('save')); ?></button>
-				</footer>
-			</div>
-		</dialog>
+	<div class="keyharbor-dialog-content" data-editor-content hidden>
+		<div class="keyharbor-alert" role="alert" aria-live="assertive" data-editor-notice hidden></div>
+		<div class="keyharbor-form-row">
+			<label class="keyharbor-field"><span><?php echo $e($t('id')); ?></span><input data-field="id" maxlength="128" autocomplete="off" required></label>
+			<label class="keyharbor-field"><span><?php echo $e($t('label')); ?></span><input data-field="label" maxlength="200" required></label>
+		</div>
+		<div class="keyharbor-form-row">
+			<label class="keyharbor-field"><span><?php echo $e($t('method')); ?></span><select data-field="method"></select></label>
+			<label class="keyharbor-field"><span><?php echo $e($t('active_key')); ?></span><select data-field="key_id"></select></label>
+		</div>
+		<h3><?php echo $e($t('keys_title')); ?></h3>
+		<p class="keyharbor-lead"><?php echo $e($t('keys_help')); ?></p>
+		<div data-key-list></div>
+		<button type="button" class="keyharbor-button" data-action="add-key"><?php echo $e($t('add_key')); ?></button>
+
+	</div>
 	<?php endif; ?>
 </section>
 <?php if ($errorCode === ''): ?><script src="<?php echo $e($this->_['scriptUrl']); ?>" defer></script><?php endif; ?>

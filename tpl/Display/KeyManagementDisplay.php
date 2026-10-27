@@ -11,11 +11,13 @@ $t = static fn(string $key, string $fallback): string => trim((string)($translat
 	: $fallback;
 ?>
 <link rel="stylesheet" href="<?php echo $e($cssUrl); ?>">
+<link rel="stylesheet" href="<?php echo $e($this->_['dialogCssUrl']); ?>">
 
 <section
 	class="keyharbor-app"
 	data-keyharbor-user
 	data-service-url="<?php echo $e($serviceUrl); ?>"
+	data-dialog-url="<?php echo $e($this->_['dialogJsUrl']); ?>"
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 	data-profile="<?php echo $e((string)json_encode($profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 >
@@ -58,94 +60,65 @@ $t = static fn(string $key, string $fallback): string => trim((string)($translat
 		</div>
 	<?php endif; ?>
 
-	<dialog class="keyharbor-dialog" data-editor-dialog>
-		<div class="keyharbor-dialog-surface" data-editor-panel>
-			<header class="keyharbor-dialog-header">
-				<div>
-					<p class="keyharbor-eyebrow"><?php echo $e($t('editor_eyebrow', 'Credential')); ?></p>
-					<h2 data-editor-title><?php echo $e($t('editor_create_title', 'Create credential')); ?></h2>
-				</div>
-				<button class="keyharbor-icon-button" type="button" data-action="close-editor" aria-label="<?php echo $e($t('close', 'Close')); ?>">×</button>
-			</header>
+	<div class="keyharbor-dialog-content" data-editor-content hidden>
+		<div class="keyharbor-alert keyharbor-alert-error" data-editor-error hidden></div>
+		<input type="hidden" data-field="credential_id">
 
-			<div class="keyharbor-dialog-body">
-				<div class="keyharbor-alert keyharbor-alert-error" data-editor-error hidden></div>
-				<input type="hidden" data-field="credential_id">
+		<label class="keyharbor-field">
+			<span><?php echo $e($t('label', 'Label')); ?></span>
+			<input type="text" maxlength="255" autocomplete="off" required data-field="label" placeholder="<?php echo $e($t('label_placeholder', 'Reporting integration')); ?>">
+			<small><?php echo $e($t('label_help', 'Use a name that identifies the consuming system.')); ?></small>
+		</label>
 
-				<label class="keyharbor-field">
-					<span><?php echo $e($t('label', 'Label')); ?></span>
-					<input type="text" maxlength="255" autocomplete="off" required data-field="label" placeholder="<?php echo $e($t('label_placeholder', 'Reporting integration')); ?>">
-					<small><?php echo $e($t('label_help', 'Use a name that identifies the consuming system.')); ?></small>
-				</label>
+		<label class="keyharbor-field">
+			<span><?php echo $e($t('authentication_mode', 'Authentication mode')); ?></span>
+			<select data-field="authentication_mode">
+				<option value="bearer"><?php echo $e($t('authentication_bearer', 'Bearer token')); ?></option>
+				<option value="hmac"><?php echo $e($t('authentication_hmac', 'HMAC-SHA256 signed requests')); ?></option>
+			</select>
+			<small><?php echo $e($t('authentication_help', 'The mode is fixed after creation. HMAC protects method, path, query, timestamp, nonce and request body.')); ?></small>
+		</label>
 
-				<label class="keyharbor-field">
-					<span><?php echo $e($t('authentication_mode', 'Authentication mode')); ?></span>
-					<select data-field="authentication_mode">
-						<option value="bearer"><?php echo $e($t('authentication_bearer', 'Bearer token')); ?></option>
-						<option value="hmac"><?php echo $e($t('authentication_hmac', 'HMAC-SHA256 signed requests')); ?></option>
-					</select>
-					<small><?php echo $e($t('authentication_help', 'The mode is fixed after creation. HMAC protects method, path, query, timestamp, nonce and request body.')); ?></small>
-				</label>
-
-				<div class="keyharbor-form-row">
-					<label class="keyharbor-field">
-						<span><?php echo $e($t('notification_address', 'Notification address')); ?></span>
-						<input type="text" maxlength="512" autocomplete="email" data-field="notification_address" placeholder="user@example.org">
-						<small><?php echo $e($t('notification_help', 'Required when the credential expires.')); ?></small>
-					</label>
-					<label class="keyharbor-field keyharbor-field-compact">
-						<span><?php echo $e($t('language', 'Language')); ?></span>
-						<input type="text" maxlength="24" autocomplete="off" data-field="notification_language" placeholder="en">
-					</label>
-				</div>
-
-				<div class="keyharbor-field">
-					<span><?php echo $e($t('expiration', 'Expiration')); ?></span>
-					<label class="keyharbor-switch-row">
-						<input type="checkbox" data-field="expires_enabled">
-						<span><?php echo $e($t('set_expiration', 'Set an expiration date')); ?></span>
-					</label>
-					<input type="datetime-local" data-field="expires_at" disabled>
-					<small><?php echo $e($t('expiration_help', 'Permanent credentials can be revoked at any time.')); ?></small>
-				</div>
-
-				<fieldset class="keyharbor-service-fieldset">
-					<legend><?php echo $e($t('service_grants', 'Service grants')); ?></legend>
-					<p><?php echo $e($t('service_grants_help', 'Grant the smallest possible set of services. Existing unavailable grants can be removed, but not newly added.')); ?></p>
-					<div class="keyharbor-service-list" data-service-list></div>
-				</fieldset>
-			</div>
-
-			<footer class="keyharbor-dialog-footer">
-				<button class="keyharbor-button keyharbor-button-secondary" type="button" data-action="close-editor"><?php echo $e($t('cancel', 'Cancel')); ?></button>
-				<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="save-editor" data-save-button><?php echo $e($t('save', 'Save credential')); ?></button>
-			</footer>
+		<div class="keyharbor-form-row">
+			<label class="keyharbor-field">
+				<span><?php echo $e($t('notification_address', 'Notification address')); ?></span>
+				<input type="text" maxlength="512" autocomplete="email" data-field="notification_address" placeholder="user@example.org">
+				<small><?php echo $e($t('notification_help', 'Required when the credential expires.')); ?></small>
+			</label>
+			<label class="keyharbor-field keyharbor-field-compact">
+				<span><?php echo $e($t('language', 'Language')); ?></span>
+				<input type="text" maxlength="24" autocomplete="off" data-field="notification_language" placeholder="en">
+			</label>
 		</div>
-	</dialog>
 
-	<dialog class="keyharbor-dialog keyharbor-token-dialog" data-token-dialog>
-		<div class="keyharbor-dialog-surface">
-			<header class="keyharbor-dialog-header">
-				<div>
-					<p class="keyharbor-eyebrow"><?php echo $e($t('secret_eyebrow', 'One-time secret')); ?></p>
-					<h2><?php echo $e($t('secret_title', 'Store this token now')); ?></h2>
-				</div>
-			</header>
-			<div class="keyharbor-dialog-body">
-				<div class="keyharbor-alert keyharbor-alert-warning">
-					<strong><?php echo $e($t('secret_warning_title', 'This token will not be shown again.')); ?></strong>
-					<span><?php echo $e($t('secret_warning_text', 'Copy it into the consuming application before closing this dialog.')); ?></span>
-				</div>
-				<pre class="keyharbor-token" data-token-value tabindex="0"></pre>
-				<div class="keyharbor-alert" data-token-mode-note hidden></div>
-				<div class="keyharbor-copy-status" data-copy-status aria-live="polite"></div>
-			</div>
-			<footer class="keyharbor-dialog-footer">
-				<button class="keyharbor-button keyharbor-button-secondary" type="button" data-action="copy-token"><?php echo $e($t('copy_token', 'Copy token')); ?></button>
-				<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="close-token"><?php echo $e($t('stored_token', 'I stored the token')); ?></button>
-			</footer>
+		<div class="keyharbor-field">
+			<span><?php echo $e($t('expiration', 'Expiration')); ?></span>
+			<label class="keyharbor-switch-row">
+				<input type="checkbox" data-field="expires_enabled">
+				<span><?php echo $e($t('set_expiration', 'Set an expiration date')); ?></span>
+			</label>
+			<input type="datetime-local" data-field="expires_at" disabled>
+			<small><?php echo $e($t('expiration_help', 'Permanent credentials can be revoked at any time.')); ?></small>
 		</div>
-	</dialog>
+
+		<fieldset class="keyharbor-service-fieldset">
+			<legend><?php echo $e($t('service_grants', 'Service grants')); ?></legend>
+			<p><?php echo $e($t('service_grants_help', 'Grant the smallest possible set of services. Existing unavailable grants can be removed, but not newly added.')); ?></p>
+			<div class="keyharbor-service-list" data-service-list></div>
+		</fieldset>
+
+	</div>
+
+	<div class="keyharbor-dialog-content" data-token-content hidden>
+		<div class="keyharbor-alert keyharbor-alert-warning">
+			<strong><?php echo $e($t('secret_warning_title', 'This token will not be shown again.')); ?></strong>
+			<span><?php echo $e($t('secret_warning_text', 'Copy it into the consuming application before closing this dialog.')); ?></span>
+		</div>
+		<pre class="keyharbor-token" data-token-value tabindex="0"></pre>
+		<div class="keyharbor-alert" data-token-mode-note hidden></div>
+		<div class="keyharbor-copy-status" data-copy-status aria-live="polite"></div>
+
+	</div>
 </section>
 
 <?php if ($error === ''): ?>

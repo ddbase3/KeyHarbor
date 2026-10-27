@@ -51,14 +51,12 @@
 }
 
 .keyharbor-hero > div:first-child,
-.keyharbor-dialog-header > div:first-child,
 .keyharbor-card-title {
 	min-width: 0;
 }
 
 .keyharbor-hero h1,
 .keyharbor-hero h2,
-.keyharbor-dialog h2,
 .keyharbor-empty h2 {
 	margin: 0;
 	color: var(--kh-text);
@@ -72,7 +70,6 @@
 	line-height: 1.3;
 }
 
-.keyharbor-dialog h2,
 .keyharbor-empty h2 {
 	font-size: 18px;
 	line-height: 1.3;
@@ -97,7 +94,6 @@
 }
 
 .keyharbor-hero-actions,
-.keyharbor-dialog-footer,
 .keyharbor-card-actions {
 	display: flex;
 	align-items: center;
@@ -458,57 +454,7 @@
 	font-size: 24px;
 }
 
-.keyharbor-dialog {
-	width: min(720px, calc(100vw - 24px));
-	max-height: min(86vh, calc(100vh - 24px));
-	padding: 0;
-	border: 0;
-	border-radius: 12px;
-	background: transparent;
-	box-shadow: none;
-}
-
-.keyharbor-dialog::backdrop {
-	background: rgb(15 23 42 / 52%);
-}
-
-.keyharbor-dialog-surface {
-	display: flex;
-	max-height: min(86vh, calc(100vh - 24px));
-	flex-direction: column;
-	margin: 0;
-	border: 1px solid rgb(15 23 42 / 14%);
-	border-radius: 12px;
-	background: var(--kh-surface);
-	box-shadow: 0 24px 80px rgb(15 23 42 / 32%);
-	overflow: hidden;
-}
-
-.keyharbor-dialog-header,
-.keyharbor-dialog-footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	background: var(--kh-surface);
-}
-
-.keyharbor-dialog-header {
-	padding: 14px 16px;
-	border-bottom: 1px solid rgb(15 23 42 / 12%);
-}
-
-.keyharbor-dialog-footer {
-	justify-content: flex-end;
-	padding: 12px 16px;
-	border-top: 1px solid rgb(15 23 42 / 12%);
-	background: #f9fafb;
-}
-
-.keyharbor-dialog-body {
-	padding: 16px;
-	overflow: auto;
-}
+/* Modal layout, scrolling and focus are owned by ClientStack ModularDialog. */
 
 .keyharbor-field {
 	display: flex;
@@ -641,10 +587,6 @@
 .keyharbor-service-option-unavailable {
 	border-style: dashed;
 	background: var(--kh-warning-bg);
-}
-
-.keyharbor-token-dialog {
-	width: min(760px, calc(100vw - 24px));
 }
 
 .keyharbor-token {
@@ -824,24 +766,6 @@
 		grid-template-columns: 1fr;
 	}
 
-	.keyharbor-dialog {
-		width: calc(100vw - 16px);
-		max-height: calc(100vh - 16px);
-	}
-
-	.keyharbor-dialog-surface {
-		max-height: calc(100vh - 16px);
-	}
-
-	.keyharbor-dialog-footer {
-		align-items: stretch;
-		flex-direction: column-reverse;
-	}
-
-	.keyharbor-dialog-footer .keyharbor-button {
-		width: 100%;
-	}
-
 	.keyharbor-card-actions .keyharbor-button {
 		flex: 1 1 auto;
 	}
@@ -858,7 +782,6 @@
 .keyharbor-encryption-note, .keyharbor-encryption-id { display: block; color: var(--kh-muted); font-size: 12px; }
 .keyharbor-encryption-select { width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid var(--kh-border-strong); border-radius: 4px; }
 .keyharbor-encryption-select:focus-visible { outline: 2px solid var(--kh-focus); outline-offset: 2px; }
-.keyharbor-encryption .keyharbor-dialog { width: min(780px, calc(100% - 24px)); }
 
 /* Service credential editor reuses KeyHarbor dialog and focus styles. */
 [data-service-operations] > fieldset {

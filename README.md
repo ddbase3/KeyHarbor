@@ -41,6 +41,7 @@ KeyHarbor depends on:
 
 - BASE3 Framework
 - CredentialFoundation
+- ClientStack (ModularDialog, >= 4.23.0)
 - an active `IUsermanager`
 - an active `IDatabase` implementation for the default repository
 - `DatabaseMigrationRunner` in the final project composition
@@ -48,6 +49,22 @@ KeyHarbor depends on:
 The plugin does not create tables during normal repository operations. Database
 schema is owned by `KeyHarborMigrationProvider` and its immutable migration
 steps.
+
+## Dialog UI
+
+The three existing KeyHarbor displays (user credentials, administrator credentials,
+and encryption profiles) use `ClientStack`'s `createStandardDialog()` for their
+editors and one-time token dialogs. The module is loaded through `IAssetResolver`
+and declared as a required dependency in `base3.json`. Dialog body scrolling,
+keyboard focus, backdrop, header and action footer are owned by ClientStack,
+not by a second KeyHarbor dialog framework. The content remains in the existing
+KeyHarbor templates and all actions continue to use the existing AJAX JSON
+endpoints. One-time credential tokens are cleared when their dialog closes.
+
+The ClientStack dialog body must remain scrollable on small viewports: when
+working with many credential grants or encryption keys, the header and footer
+stay visible while the fields scroll independently. The encrypted key material
+and all saved encryption profiles are unaffected by this UI-only change.
 
 ## Token format
 
@@ -473,8 +490,13 @@ are encrypted **before** entering `ISettingsStore` with the existing
 `CredentialSecretCipher` and its deployment master key. Fixed secrets therefore
 require `keyharbor.hmac_master_key` to be configured as a base64-encoded 32-byte
 value or a supported env/file resolver definition. The UI never returns fixed
-secrets or their encrypted ciphertext/nonce. Back up the KeyHarbor master key
-separately from settings storage.
+secrets or their encrypted ciphertext/nonce. New profiles can be saved without
+manually adding keys: KeyHarbor generates the first `fixed` key and its random
+ID on the server. For newly added `fixed` entries, the administrator may leave
+the key ID empty, and KeyHarbor generates it as well. The administrator never
+enters or receives plaintext fixed-key material. Adding keys from `env`, `file`
+or `configuration` still requires the appropriate source settings.
+Back up the KeyHarbor master key separately from settings storage.
 
 If a fixed-key save reports that the KeyHarbor master key is unavailable,
 configure `keyharbor.hmac_master_key` in the active BASE3 `IConfiguration`
@@ -500,9 +522,10 @@ for new entries not yet saved. The server rejects omitted or changed stored
 keys even when a direct JSON request bypasses the editor. Labels, additional
 keys and the active key selection can still be updated.
 
-For profiles whose active key uses `fixed`, the **Rotate** action generates
-32 random bytes, base64-encodes the result, encrypts it with the existing
-master key and saves it under a new globally unique key ID. Only the active
+For profiles whose active key uses `fixed`, the **Rotate** action reuses the
+same server-side generation as initial creation: it generates 32 random bytes,
+base64-encodes them, encrypts the result with the existing master key and
+saves it under a new globally unique key ID. Only the active
 key ID changes. All previous keys remain available to `getReadKey()` so
 historical ciphertext remains readable. Unlike API credential rotation,
 **encryption-key rotation does not revoke or overwrite old secrets**.

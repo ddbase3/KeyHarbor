@@ -11,6 +11,7 @@ use CredentialFoundation\Api\IEncryptionTargetProvider;
 use CredentialFoundation\Dto\EncryptionKeyMaterial;
 use CredentialFoundation\Dto\EncryptionTargetDefinition;
 use InvalidArgumentException;
+use KeyHarbor\Exception\EncryptionProfileValidationException;
 use KeyHarbor\Security\CredentialSecretCipher;
 use RuntimeException;
 use UnexpectedValueException;
@@ -160,7 +161,8 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 
 	/**
 	 * Saves profile metadata and additional keys without ever changing or removing
-	 * persisted key definitions. Fixed secrets remain hidden from the editor.
+	 * persisted key definitions. New fixed keys are generated and encrypted here;
+	 * a new profile without key entries automatically receives its first fixed key.
 	 *
 	 * @param array<string,mixed> $input Complete editor record
 	 * @return void
@@ -175,17 +177,20 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 		$method = $input['method'] ?? null;
 		$activeId = $input['key_id'] ?? null;
 		if ($label === '' || strlen($label) > 200 || !is_string($method) || !is_string($activeId)) {
-			throw new InvalidArgumentException('Profile label, method and active key ID are required.');
+			throw new EncryptionProfileValidationException('profile_fields', 'Profile label, method and active key ID are required.');
 		}
 		$this->requireMethod($method);
-		$activeId = $this->assertId($activeId);
 		$old = $this->settings->get(self::PROFILE_GROUP, $id);
 		if ($old !== [] && ($old['method'] ?? null) !== $method) {
-			throw new InvalidArgumentException('The encryption method of an existing profile cannot be changed. Create another profile.');
+			throw new EncryptionProfileValidationException('method_immutable', 'The encryption method of an existing profile cannot be changed. Create another profile.');
 		}
 		$incoming = $input['keys'] ?? null;
 		if (!is_array($incoming) || !array_is_list($incoming)) {
-			throw new InvalidArgumentException('Encryption keys must be a list.');
+			throw new EncryptionProfileValidationException('keys_list', 'Encryption keys must be a list.');
+		}
+		if ($old === [] && $incoming === []) {
+			$activeId = $this->generateNewKeyId();
+			$incoming[] = ['id' => $activeId, 'mode' => 'fixed'];
 		}
 		if ($old !== [] && !is_array($old['keys'] ?? null)) {
 			throw new RuntimeException('Invalid stored encryption keys.');
@@ -194,30 +199,35 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 		$keys = [];
 		foreach ($incoming as $entry) {
 			if (!is_array($entry)) {
-				throw new InvalidArgumentException('Invalid key entry.');
-			}
-			$keyId = $this->assertId($entry['id'] ?? null);
-			if (isset($keys[$keyId])) {
-				throw new InvalidArgumentException('Duplicate key ID within the profile.');
+				throw new EncryptionProfileValidationException('invalid_key_entry', 'Invalid key entry.');
 			}
 			$mode = $entry['mode'] ?? null;
 			if (!is_string($mode) || !in_array($mode, ['fixed', 'env', 'file', 'configuration'], true)) {
-				throw new InvalidArgumentException('Unsupported encryption key source.');
+				throw new EncryptionProfileValidationException('unsupported_source', 'Unsupported encryption key source.');
+			}
+			$keyId = ($mode === 'fixed' && ($entry['id'] ?? null) === '')
+				? $this->generateNewKeyId($keys)
+				: $this->assertId($entry['id'] ?? null);
+			if (isset($keys[$keyId])) {
+				throw new EncryptionProfileValidationException('duplicate_key_id', 'Duplicate key ID within the profile.');
+			}
+			if ($old === [] && count($incoming) === 1 && $activeId === '') {
+				$activeId = $keyId;
 			}
 			$previous = $previousKeys[$keyId] ?? null;
 			if ($previous !== null) {
 				if (!is_array($previous) || ($previous['mode'] ?? null) !== $mode) {
-					throw new InvalidArgumentException('Persisted encryption keys are immutable.');
+					throw new EncryptionProfileValidationException('key_immutable', 'Persisted encryption keys are immutable.');
 				}
 				if ($mode === 'fixed') {
 					if (($entry['secret'] ?? '') !== '') {
-						throw new InvalidArgumentException('Persisted encryption secrets cannot be replaced. Rotate the key.');
+						throw new EncryptionProfileValidationException('fixed_immutable', 'Persisted encryption secrets cannot be replaced. Rotate the key.');
 					}
 				} else {
 					$fields = $mode === 'env' ? ['name'] : ($mode === 'file' ? ['path'] : ['group', 'key']);
 					foreach ($fields as $field) {
 						if (!is_string($entry[$field] ?? null) || trim($entry[$field]) !== ($previous[$field] ?? null)) {
-							throw new InvalidArgumentException('Persisted encryption key sources cannot be changed.');
+							throw new EncryptionProfileValidationException('source_immutable', 'Persisted encryption key sources cannot be changed.');
 						}
 					}
 				}
@@ -225,44 +235,39 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 				continue;
 			}
 			if ($mode === 'fixed') {
-				$secret = $entry['secret'] ?? null;
-				if (!is_string($secret) || strlen($secret) < 32) {
-					throw new InvalidArgumentException('New fixed keys require at least 32 bytes of random secret material.');
+				if (($entry['secret'] ?? '') !== '') {
+					throw new EncryptionProfileValidationException('fixed_managed', 'Fixed encryption keys are generated by KeyHarbor, not entered manually.');
 				}
-				$encrypted = $this->secretCipher->encrypt($secret);
-				$keys[$keyId] = [
-					'mode' => 'fixed',
-					'ciphertext' => $encrypted->getCiphertext(),
-					'nonce' => $encrypted->getNonce()
-				];
+				$keys[$keyId] = $this->createEncryptedFixedKey();
 			} else {
 				$keys[$keyId] = ['mode' => $mode];
 				$fields = $mode === 'env' ? ['name'] : ($mode === 'file' ? ['path'] : ['group', 'key']);
 				foreach ($fields as $field) {
 						$value = $entry[$field] ?? null;
 					if (!is_string($value) || trim($value) === '') {
-							throw new InvalidArgumentException('Encryption key source is missing a required field.');
+							throw new EncryptionProfileValidationException('source_fields_required', 'Encryption key source is missing a required field.');
 						}
 					$keys[$keyId][$field] = trim($value);
 				}
 			}
 		}
-		if (!isset($keys[$activeId])) {
-			throw new InvalidArgumentException('The active key ID must reference a configured key.');
+		if ($activeId === '' || !isset($keys[$activeId])) {
+			throw new EncryptionProfileValidationException('active_key_missing', 'The active key ID must reference a configured key.');
 		}
+		$this->assertId($activeId);
 		foreach ($this->profiles() as $otherId => $otherProfile) {
 			if ((string)$otherId === $id) {
 				continue;
 			}
 			foreach (array_keys($keys) as $keyId) {
 				if (array_key_exists($keyId, (array)($otherProfile['keys'] ?? []))) {
-					throw new InvalidArgumentException('Encryption key IDs must be globally unique.');
+					throw new EncryptionProfileValidationException('key_id_global_duplicate', 'Encryption key IDs must be globally unique.');
 				}
 			}
 		}
 		foreach (array_keys($previousKeys) as $previousId) {
 			if (!array_key_exists($previousId, $keys)) {
-				throw new InvalidArgumentException('Persisted encryption keys cannot be removed.');
+				throw new EncryptionProfileValidationException('stored_key_missing', 'Persisted encryption keys cannot be removed.');
 			}
 		}
 		$this->settings->set(self::PROFILE_GROUP, $id, [
@@ -289,21 +294,10 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 		$profile = $this->requireProfile($this->assertId($id));
 		$active = $profile['key_id'] ?? null;
 		if (!is_string($active) || ($profile['keys'][$active]['mode'] ?? null) !== 'fixed') {
-			throw new InvalidArgumentException('Only profiles with an active fixed key support automatic rotation.');
+			throw new EncryptionProfileValidationException('rotation_requires_fixed', 'Only profiles with an active fixed key support automatic rotation.');
 		}
-		$newId = 'key-' . bin2hex(random_bytes(12));
-		foreach ($this->profiles() as $existingProfile) {
-			if (array_key_exists($newId, (array)($existingProfile['keys'] ?? []))) {
-				throw new RuntimeException('Generated encryption key ID already exists.');
-			}
-		}
-		$secret = base64_encode(random_bytes(32));
-		$encrypted = $this->secretCipher->encrypt($secret);
-		$profile['keys'][$newId] = [
-			'mode' => 'fixed',
-			'ciphertext' => $encrypted->getCiphertext(),
-			'nonce' => $encrypted->getNonce()
-		];
+		$newId = $this->generateNewKeyId();
+		$profile['keys'][$newId] = $this->createEncryptedFixedKey();
 		$profile['key_id'] = $newId;
 		$this->settings->set(self::PROFILE_GROUP, $id, $profile);
 		$this->settings->save();
@@ -315,7 +309,7 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 		$this->assertId($targetId);
 		$previous = $this->getAssignedProfileId($targetId);
 		if ($previous !== null && $previous !== ($profileId ?? '') && !$confirmChange) {
-			throw new InvalidArgumentException('Changing an existing encryption assignment requires explicit confirmation.');
+			throw new EncryptionProfileValidationException('assignment_confirmation', 'Changing an existing encryption assignment requires explicit confirmation.');
 		}
 		if ($profileId !== null && $profileId !== '') {
 			$this->assertId($profileId);
@@ -327,7 +321,7 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 				}
 			}
 			if (!$exists) {
-				throw new InvalidArgumentException('Encryption target is not currently available.');
+				throw new EncryptionProfileValidationException('target_unavailable', 'Encryption target is not currently available.');
 			}
 			$profile = $this->requireProfile($profileId);
 			$this->requireMethod((string)($profile['method'] ?? ''));
@@ -337,6 +331,34 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 			$this->settings->remove(self::TARGET_GROUP, $targetId);
 		}
 		$this->settings->save();
+	}
+
+	/**
+	 * @param array<string,array<string,mixed>> $reserved Keys already assembled in the current save
+	 * @return string Unique random public key identifier
+	 */
+	private function generateNewKeyId(array $reserved = []): string {
+		$id = 'key-' . bin2hex(random_bytes(12));
+		if (isset($reserved[$id])) {
+			throw new RuntimeException('Generated encryption key ID already exists.');
+		}
+		foreach ($this->profiles() as $profile) {
+			if (array_key_exists($id, (array)($profile['keys'] ?? []))) {
+				throw new RuntimeException('Generated encryption key ID already exists.');
+			}
+		}
+		return $id;
+	}
+
+	/** @return array{mode:string,ciphertext:string,nonce:string} */
+	private function createEncryptedFixedKey(): array {
+		$secret = base64_encode(random_bytes(32));
+		$encrypted = $this->secretCipher->encrypt($secret);
+		return [
+			'mode' => 'fixed',
+			'ciphertext' => $encrypted->getCiphertext(),
+			'nonce' => $encrypted->getNonce()
+		];
 	}
 
 	/** @return array<string,array<string,mixed>> */
@@ -395,13 +417,13 @@ final class EncryptionProfileService implements IEncryptionProfileService {
 
 	private function requireMethod(string $method): void {
 		if ($method === '' || !isset($this->getMethodMap()[$method])) {
-			throw new InvalidArgumentException('Unknown encryption method.');
+			throw new EncryptionProfileValidationException('unknown_method', 'Unknown encryption method.');
 		}
 	}
 
 	private function assertId(mixed $id): string {
 		if (!is_string($id) || !preg_match(self::ID_PATTERN, $id)) {
-			throw new InvalidArgumentException('Invalid encryption identifier.');
+			throw new EncryptionProfileValidationException('invalid_identifier', 'Invalid encryption identifier.');
 		}
 		return $id;
 	}

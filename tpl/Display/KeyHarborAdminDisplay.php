@@ -13,11 +13,13 @@ $t = static function(string $key) use ($translations): string {
 };
 ?>
 <link rel="stylesheet" href="<?php echo $e($cssUrl); ?>">
+<link rel="stylesheet" href="<?php echo $e($this->_['dialogCssUrl']); ?>">
 
 <section
 	class="keyharbor-app"
 	data-keyharbor-admin
 	data-service-url="<?php echo $e($serviceUrl); ?>"
+	data-dialog-url="<?php echo $e($this->_['dialogJsUrl']); ?>"
 	data-strings="<?php echo $e((string)json_encode($translations, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>"
 >
 	<div class="keyharbor-hero">
@@ -78,68 +80,49 @@ $t = static function(string $key) use ($translations): string {
 		</div>
 	<?php endif; ?>
 	<?php if ($error === ''): ?>
-	<dialog class="keyharbor-dialog" data-service-editor aria-labelledby="keyharbor-service-editor-title">
-		<div class="keyharbor-dialog-surface">
-			<header class="keyharbor-dialog-header">
-				<h2 id="keyharbor-service-editor-title" data-service-editor-title><?php echo $e($t('create_service')); ?></h2>
-				<button class="keyharbor-icon-button" type="button" data-action="close-service-editor" aria-label="<?php echo $e($t('close')); ?>">×</button>
-			</header>
-			<div class="keyharbor-dialog-body">
-				<div class="keyharbor-alert keyharbor-alert-error" data-service-editor-error role="alert" hidden></div>
-				<input type="hidden" data-service-field="credential_id">
-				<label class="keyharbor-field">
-					<span><?php echo $e($t('service_subject')); ?></span>
-					<input type="text" data-service-field="subject_id" maxlength="160" autocomplete="off" required pattern="[a-z][a-z0-9._:-]*" placeholder="contourz">
-					<small><?php echo $e($t('service_subject_help')); ?></small>
-				</label>
-				<label class="keyharbor-field">
-					<span><?php echo $e($t('service_label')); ?></span>
-					<input type="text" data-service-field="label" maxlength="255" autocomplete="off" required>
-				</label>
-				<div class="keyharbor-form-row">
-					<label class="keyharbor-field">
-						<span><?php echo $e($t('service_notification')); ?></span>
-						<input type="email" data-service-field="notification_address" maxlength="512" autocomplete="email">
-					</label>
-					<label class="keyharbor-field keyharbor-field-compact">
-						<span><?php echo $e($t('service_language')); ?></span>
-						<input type="text" data-service-field="notification_language" maxlength="24" value="en" autocomplete="off">
-					</label>
-				</div>
-				<div class="keyharbor-field">
-					<span><?php echo $e($t('service_expiration')); ?></span>
-					<label class="keyharbor-switch-row">
-						<input type="checkbox" data-service-field="expires_enabled">
-						<span><?php echo $e($t('service_set_expiration')); ?></span>
-					</label>
-					<input type="datetime-local" data-service-field="expires_at" disabled>
-				</div>
-				<fieldset class="keyharbor-service-fieldset">
-					<legend><?php echo $e($t('service_operations')); ?></legend>
-					<p><?php echo $e($t('service_operations_help')); ?></p>
-					<div data-service-operations></div>
-				</fieldset>
-			</div>
-			<footer class="keyharbor-dialog-footer">
-				<button class="keyharbor-button keyharbor-button-secondary" type="button" data-action="close-service-editor"><?php echo $e($t('cancel')); ?></button>
-				<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="save-service" data-service-save><?php echo $e($t('save_service')); ?></button>
-			</footer>
+	<div class="keyharbor-dialog-content" data-service-editor-content hidden>
+		<div class="keyharbor-alert keyharbor-alert-error" data-service-editor-error role="alert" hidden></div>
+		<input type="hidden" data-service-field="credential_id">
+		<label class="keyharbor-field">
+			<span><?php echo $e($t('service_subject')); ?></span>
+			<input type="text" data-service-field="subject_id" maxlength="160" autocomplete="off" required pattern="[a-z][a-z0-9._:-]*" placeholder="contourz">
+			<small><?php echo $e($t('service_subject_help')); ?></small>
+		</label>
+		<label class="keyharbor-field">
+			<span><?php echo $e($t('service_label')); ?></span>
+			<input type="text" data-service-field="label" maxlength="255" autocomplete="off" required>
+		</label>
+		<div class="keyharbor-form-row">
+			<label class="keyharbor-field">
+				<span><?php echo $e($t('service_notification')); ?></span>
+				<input type="email" data-service-field="notification_address" maxlength="512" autocomplete="email">
+			</label>
+			<label class="keyharbor-field keyharbor-field-compact">
+				<span><?php echo $e($t('service_language')); ?></span>
+				<input type="text" data-service-field="notification_language" maxlength="24" value="en" autocomplete="off">
+			</label>
 		</div>
-	</dialog>
-	<dialog class="keyharbor-dialog keyharbor-token-dialog" data-service-token-dialog aria-labelledby="keyharbor-token-dialog-title">
-		<div class="keyharbor-dialog-surface">
-			<header class="keyharbor-dialog-header"><h2 id="keyharbor-token-dialog-title"><?php echo $e($t('service_token_title')); ?></h2></header>
-			<div class="keyharbor-dialog-body">
-				<p class="keyharbor-alert keyharbor-alert-warning"><?php echo $e($t('service_token_warning')); ?></p>
-				<pre class="keyharbor-token" data-service-token-value tabindex="0"></pre>
-				<div class="keyharbor-copy-status" data-service-copy-status aria-live="polite"></div>
-			</div>
-			<footer class="keyharbor-dialog-footer">
-				<button class="keyharbor-button keyharbor-button-secondary" type="button" data-action="copy-service-token"><?php echo $e($t('copy_service_token')); ?></button>
-				<button class="keyharbor-button keyharbor-button-primary" type="button" data-action="close-service-token"><?php echo $e($t('close_service_token')); ?></button>
-			</footer>
+		<div class="keyharbor-field">
+			<span><?php echo $e($t('service_expiration')); ?></span>
+			<label class="keyharbor-switch-row">
+				<input type="checkbox" data-service-field="expires_enabled">
+				<span><?php echo $e($t('service_set_expiration')); ?></span>
+			</label>
+			<input type="datetime-local" data-service-field="expires_at" disabled>
 		</div>
-	</dialog>
+		<fieldset class="keyharbor-service-fieldset">
+			<legend><?php echo $e($t('service_operations')); ?></legend>
+			<p><?php echo $e($t('service_operations_help')); ?></p>
+			<div data-service-operations></div>
+		</fieldset>
+
+	</div>
+	<div class="keyharbor-dialog-content" data-service-token-content hidden>
+		<p class="keyharbor-alert keyharbor-alert-warning"><?php echo $e($t('service_token_warning')); ?></p>
+		<pre class="keyharbor-token" data-service-token-value tabindex="0"></pre>
+		<div class="keyharbor-copy-status" data-service-copy-status aria-live="polite"></div>
+
+	</div>
 	<?php endif; ?>
 </section>
 

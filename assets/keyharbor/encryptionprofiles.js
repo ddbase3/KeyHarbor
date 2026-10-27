@@ -1,21 +1,40 @@
 (function() {
 	'use strict';
 
-	function init() {
+	async function init() {
 		const root = document.querySelector('[data-keyharbor-encryption]');
 		if(!root || root.dataset.initialized === 'true') { return; }
 		root.dataset.initialized = 'true';
 		const strings = JSON.parse(root.dataset.strings || '{}');
 		const serviceUrl = root.dataset.serviceUrl || '';
 		const state = { profiles: [], methods: [], targets: [], assignments: {}, editing: null };
-		const editor = root.querySelector('[data-editor]');
-		const keysList = root.querySelector('[data-key-list]');
+		const editorContent = root.querySelector('[data-editor-content]');
+		const keysList = editorContent.querySelector('[data-key-list]');
 		const fields = {
-			id: root.querySelector('[data-field="id"]'),
-			label: root.querySelector('[data-field="label"]'),
-			method: root.querySelector('[data-field="method"]'),
-			keyId: root.querySelector('[data-field="key_id"]')
+			id: editorContent.querySelector('[data-field="id"]'),
+			label: editorContent.querySelector('[data-field="label"]'),
+			method: editorContent.querySelector('[data-field="method"]'),
+			keyId: editorContent.querySelector('[data-field="key_id"]')
 		};
+
+		const dialogModule = await import(new URL(root.dataset.dialogUrl, document.baseURI).href);
+		editorContent.hidden = false;
+		const editorDialog = dialogModule.createStandardDialog({
+			id: 'keyharbor-encryption-editor',
+			className: 'keyharbor-app keyharbor-encryption',
+			size: 'large',
+			title: t('create_title'),
+			content: editorContent,
+			strings: { close: t('cancel'), closeDialog: t('cancel') },
+			closeButtonPlugin: { enabled: false },
+			statusPlugin: { renderEmpty: false },
+			buttons: [
+				{ key: 'cancel', label: t('cancel'), action: 'close' },
+				{ key: 'save', label: t('save'), primary: true, async action() { await saveProfile(); } }
+			]
+		});
+		editorDialog.init();
+
 
 		function t(name) {
 			if(typeof strings[name] !== 'string' || !strings[name]) {
@@ -41,23 +60,22 @@
 			result.value = value;
 			return result;
 		}
-		function field(label, name, value, isSecret) {
+		function field(label, name, value) {
 			const wrapper = node('label', 'keyharbor-field');
 			wrapper.appendChild(node('span', '', label));
 			const input = node('input');
 			input.dataset.prop = name;
-			input.type = isSecret ? 'password' : 'text';
+			input.type = 'text';
 			input.autocomplete = 'off';
 			input.value = value || '';
-			if(isSecret) { input.placeholder = t('secret_placeholder'); }
 			wrapper.appendChild(input);
 			return wrapper;
 		}
 		function notice(message, error) {
-			const editorNotice = editor.querySelector('[data-editor-notice]');
+			const editorNotice = editorContent.querySelector('[data-editor-notice]');
 			const pageNotice = root.querySelector('[data-notice]');
-			const target = editor.open ? editorNotice : pageNotice;
-			const other = editor.open ? pageNotice : editorNotice;
+			const target = editorDialog.getState().open ? editorNotice : pageNotice;
+			const other = editorDialog.getState().open ? pageNotice : editorNotice;
 			other.hidden = true;
 			other.textContent = '';
 			target.hidden = !message;
@@ -65,6 +83,10 @@
 			target.className = 'keyharbor-alert ' + (error ? 'keyharbor-alert-error' : 'keyharbor-alert-success');
 		}
 		function errorText(response) {
+			if(response.error_code === 'validation' && typeof response.validation_reason === 'string') {
+				const key = 'validation_' + response.validation_reason;
+				if(typeof strings[key] === 'string' && strings[key]) { return t(key); }
+			}
 			if(response.error_code === 'internal_error') {
 				return t('error_internal') + ' ' + (response.error_id || '');
 			}
@@ -174,13 +196,13 @@
 			}
 		}
 		function addKey(data, persisted) {
-			const definition = data || { id: '', mode: 'env' };
+			const definition = data || { id: '', mode: 'fixed' };
 			const locked = persisted === true;
 			const block = node('div', 'keyharbor-encryption-key');
 			block.dataset.keyEntry = 'true';
 			if(locked) { block.dataset.persisted = 'true'; }
 			const head = node('div', 'keyharbor-encryption-key-header');
-			head.appendChild(field(t('key_id'), 'id', definition.id || '', false));
+			head.appendChild(field(t('key_id'), 'id', definition.id || ''));
 			const keyIdInput = head.querySelector('input');
 			keyIdInput.readOnly = locked;
 			if(!locked) { keyIdInput.addEventListener('input', updateActiveKey); }
@@ -188,7 +210,7 @@
 			source.appendChild(node('span', '', t('source')));
 			const select = node('select');
 			select.dataset.prop = 'mode';
-			[['env','source_env'],['file','source_file'],['configuration','source_configuration'],['fixed','source_fixed']].forEach(([value, key]) => {
+			[['fixed','source_fixed'],['env','source_env'],['file','source_file'],['configuration','source_configuration']].forEach(([value, key]) => {
 				select.appendChild(option(value, t(key)));
 			});
 			select.value = definition.mode || 'env';
@@ -206,14 +228,14 @@
 			function showSourceFields() {
 				details.textContent = '';
 				const mode = select.value;
-				if(mode === 'env') { details.appendChild(field(t('env_name'), 'name', definition.name, false)); }
-				if(mode === 'file') { details.appendChild(field(t('file_path'), 'path', definition.path, false)); }
+				keyIdInput.placeholder = mode === 'fixed' && !locked ? t('fixed_key_id_hint') : '';
+				if(mode === 'env') { details.appendChild(field(t('env_name'), 'name', definition.name)); }
+				if(mode === 'file') { details.appendChild(field(t('file_path'), 'path', definition.path)); }
 				if(mode === 'configuration') {
-					details.appendChild(field(t('config_group'), 'group', definition.group, false));
-					details.appendChild(field(t('config_key'), 'key', definition.key, false));
+					details.appendChild(field(t('config_group'), 'group', definition.group));
+					details.appendChild(field(t('config_key'), 'key', definition.key));
 				}
-				if(mode === 'fixed') {
-					details.appendChild(field(t('fixed_secret'), 'secret', '', true));
+				if(mode === 'fixed' && !locked) {
 					details.appendChild(node('small', 'keyharbor-encryption-note', t('fixed_secret_help')));
 				}
 			}
@@ -224,11 +246,12 @@
 			showSourceFields();
 			keysList.appendChild(block);
 			updateActiveKey();
+			return block;
 		}
 		function openEditor(profile) {
-			notice('', false);
+			notice('');
 			state.editing = profile || null;
-			root.querySelector('[data-editor-title]').textContent = profile ? t('edit_title') : t('create_title');
+			editorDialog.execute('setTitle', profile ? t('edit_title') : t('create_title'));
 			fields.id.value = profile ? profile.id : '';
 			fields.id.disabled = Boolean(profile);
 			fields.label.value = profile ? profile.label : '';
@@ -240,15 +263,13 @@
 			keysList.textContent = '';
 			(profile ? profile.keys : []).forEach((key) => addKey(key, true));
 			fields.keyId.value = profile ? profile.key_id : '';
-			if(typeof editor.showModal === 'function') { editor.showModal(); }
-			else { editor.setAttribute('open', 'open'); }
+			editorDialog.open({ source: 'encryptionProfileEditor' });
 			fields.label.focus();
 		}
 		function closeEditor() {
-			notice('', false);
-			if(typeof editor.close === 'function') { editor.close(); }
-			else { editor.removeAttribute('open'); }
-			keysList.querySelectorAll('[data-prop="secret"]').forEach((input) => { input.value = ''; });
+			notice('');
+			editorDialog.close({ source: 'encryptionProfileEditor' });
+
 		}
 		function collectKeys() {
 			return Array.from(keysList.querySelectorAll('[data-key-entry]')).map((entry) => {
@@ -260,20 +281,31 @@
 			});
 		}
 		async function saveProfile() {
-			notice('', false);
+			notice('');
 			const keys = collectKeys();
 			const profile = {
 				id: fields.id.value.trim(), label: fields.label.value.trim(), method: fields.method.value,
 				key_id: fields.keyId.value, keys
 			};
-			if(!profile.id || !profile.label || !profile.method || !profile.key_id || keys.length === 0) {
-				notice(t('error_validation'), true); return;
+			if(!profile.id) {
+				notice(t('validation_invalid_identifier'), true); fields.id.focus(); return;
+			}
+			if(!profile.label || !profile.method) {
+				notice(t('validation_profile_fields'), true);
+				(!profile.label ? fields.label : fields.method).focus(); return;
+			}
+			if(state.editing && keys.length === 0) {
+				notice(t('validation_keys_list'), true); return;
+			}
+			const autoActive = !state.editing && (keys.length === 0 || (keys.length === 1 && keys[0].mode === 'fixed'));
+			if(!profile.key_id && !autoActive) {
+				notice(t('validation_active_key_missing'), true); fields.keyId.focus(); return;
 			}
 			try {
 				await request({ mode: 'save', profile });
 				closeEditor();
 				await load();
-				notice(t('saved'), false);
+				notice(t('saved'));
 			} catch(error) { notice(error.message, true); }
 		}
 		async function rotateFixedKey(id) {
@@ -281,7 +313,7 @@
 			try {
 				const response = await request({ mode: 'rotate', profile_id: id });
 				await load();
-				notice(t('saved') + ' ' + response.key_id, false);
+				notice(t('saved') + ' ' + response.key_id);
 			} catch(error) { notice(error.message, true); }
 		}
 		async function changeAssignment(select) {
@@ -295,32 +327,34 @@
 			select.disabled = true;
 			try {
 				await request({ mode: 'assign', target_id: targetId, profile_id: selected, confirm_change: previous !== '' });
-				await load(); notice(t('assignment_saved'), false);
+				await load(); notice(t('assignment_saved'));
 			} catch(error) {
 				select.value = previous; notice(error.message, true);
 			} finally { select.disabled = false; }
 		}
 
-		root.addEventListener('click', (event) => {
+		function handleClick(event) {
 			const action = event.target.closest('[data-action]');
-			if(!action || !root.contains(action)) { return; }
+			if(!action || !(root.contains(action) || editorContent.contains(action))) { return; }
 			const id = action.dataset.id || '';
 			if(action.dataset.action === 'refresh') { load(); }
 			if(action.dataset.action === 'create') { openEditor(null); }
 			if(action.dataset.action === 'edit') { openEditor(state.profiles.find((p) => p.id === id) || null); }
 			if(action.dataset.action === 'rotate') { rotateFixedKey(id); }
-			if(action.dataset.action === 'add-key') { addKey({ mode: 'env' }, false); }
+			if(action.dataset.action === 'add-key') {
+				const entry = addKey({ mode: 'fixed' });
+				entry.querySelector('[data-prop="id"]').focus();
+			}
 			if(action.dataset.action === 'discard-key') {
 				const entry = action.closest('[data-key-entry]');
 				if(entry && !entry.dataset.persisted) { entry.remove(); updateActiveKey(); }
 			}
-			if(action.dataset.action === 'save') { saveProfile(); }
-			if(action.dataset.action === 'cancel') { closeEditor(); }
-		});
+		}
+		root.addEventListener('click', handleClick);
+		editorContent.addEventListener('click', handleClick);
 		root.addEventListener('change', (event) => {
 			if(event.target.matches('[data-target-id]')) { changeAssignment(event.target); }
 		});
-		editor.addEventListener('cancel', (event) => { event.preventDefault(); closeEditor(); });
 		load();
 	}
 

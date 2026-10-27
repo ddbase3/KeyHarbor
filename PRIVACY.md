@@ -379,8 +379,11 @@ users authorized for system administration through the new page.
 A `fixed` secret is encrypted with the existing KeyHarbor HMAC master key using
 sodium secretbox and a random nonce before it is passed to `ISettingsStore`.
 The encrypted ciphertext and nonce, but not the raw value, are stored in the
-profile. The encryption key is resolved on demand for trusted runtime
-consumers. The selected source may alternatively refer to `env`, `file`, or
+profile. For newly created fixed keys, the secret is generated only on the
+server from secure random bytes. The plaintext is not submitted by or returned
+to the browser. A newly created profile with no keys automatically receives
+one fixed key with a generated unique ID. The encryption key is resolved on
+demand for trusted runtime consumers. The selected source may alternatively refer to `env`, `file`, or
 BASE3 configuration; in those cases KeyHarbor stores the source definition,
 not the resolved secret. Access to those sources and master-key backups depends
 on the actual deployment. Source definitions are never sent with fixed secrets
@@ -417,3 +420,16 @@ and their accessible names remain unchanged; no new ARIA landmarks are added. Th
 does not change the credential or encryption operations, transmitted data, storage, retention,
 recipients, or access-control decisions described above. Browser and screen-reader verification
 remains necessary for the deployment; the standalone template test is not a WCAG compliance claim.
+
+## ClientStack dialog integration (2026-10-27)
+
+The three existing KeyHarbor displays use the ClientStack ModularDialog runtime
+for their browser dialogs. It owns the modal focus management, scrolling and
+close lifecycle. The existing KeyHarbor AJAX endpoints, server-side permissions,
+secret storage, processing purposes, retention and recipients are unchanged.
+One-time API credential tokens remain ephemeral in the browser DOM and are
+cleared on dialog close, including keyboard and backdrop-driven closes where
+permitted. Copying a token still places it in the operating-system clipboard,
+which KeyHarbor cannot delete. No dialog content is written to browser
+persistent storage by this integration. Deployment-specific accessibility
+verification remains necessary and is not implied by the component switch.

@@ -1,7 +1,7 @@
 (function() {
 	'use strict';
 
-	function init() {
+	async function init() {
 		const root = document.querySelector('[data-keyharbor-user]');
 		if(!root) { return; }
 
@@ -12,29 +12,69 @@
 		const grid = root.querySelector('[data-credential-grid]');
 		const empty = root.querySelector('[data-empty]');
 		const notice = root.querySelector('[data-notice]');
-		const editorDialog = root.querySelector('[data-editor-dialog]');
-		const editorTitle = root.querySelector('[data-editor-title]');
-		const editorError = root.querySelector('[data-editor-error]');
-		const serviceList = root.querySelector('[data-service-list]');
-		const saveButton = root.querySelector('[data-save-button]');
-		const tokenDialog = root.querySelector('[data-token-dialog]');
-		const tokenValue = root.querySelector('[data-token-value]');
-		const copyStatus = root.querySelector('[data-copy-status]');
-		const tokenModeNote = root.querySelector('[data-token-mode-note]');
+		const editorContent = root.querySelector('[data-editor-content]');
+		const tokenContent = root.querySelector('[data-token-content]');
+		const editorError = editorContent.querySelector('[data-editor-error]');
+		const serviceList = editorContent.querySelector('[data-service-list]');
+		const tokenValue = tokenContent.querySelector('[data-token-value]');
+		const copyStatus = tokenContent.querySelector('[data-copy-status]');
+		const tokenModeNote = tokenContent.querySelector('[data-token-mode-note]');
 		const fields = {
-			id: root.querySelector('[data-field="credential_id"]'),
-			label: root.querySelector('[data-field="label"]'),
-			authenticationMode: root.querySelector('[data-field="authentication_mode"]'),
-			notificationAddress: root.querySelector('[data-field="notification_address"]'),
-			notificationLanguage: root.querySelector('[data-field="notification_language"]'),
-			expiresEnabled: root.querySelector('[data-field="expires_enabled"]'),
-			expiresAt: root.querySelector('[data-field="expires_at"]')
+			id: editorContent.querySelector('[data-field="credential_id"]'),
+			label: editorContent.querySelector('[data-field="label"]'),
+			authenticationMode: editorContent.querySelector('[data-field="authentication_mode"]'),
+			notificationAddress: editorContent.querySelector('[data-field="notification_address"]'),
+			notificationLanguage: editorContent.querySelector('[data-field="notification_language"]'),
+			expiresEnabled: editorContent.querySelector('[data-field="expires_enabled"]'),
+			expiresAt: editorContent.querySelector('[data-field="expires_at"]')
 		};
 		const state = {
 			credentials: [],
 			services: [],
 			profile
 		};
+
+		const dialogModule = await import(new URL(root.dataset.dialogUrl, document.baseURI).href);
+		editorContent.hidden = false;
+		tokenContent.hidden = false;
+		const editorDialog = dialogModule.createStandardDialog({
+			id: 'keyharbor-user-editor',
+			className: 'keyharbor-app',
+			size: 'large',
+			title: t('editor_create_title', 'Create credential'),
+			content: editorContent,
+			strings: { close: t('close', 'Close'), closeDialog: t('close', 'Close') },
+			closeButtonPlugin: { label: t('close', 'Close'), ariaLabel: t('close', 'Close') },
+			statusPlugin: { renderEmpty: false },
+			buttons: [
+				{ key: 'cancel', label: t('cancel', 'Cancel'), action: 'close' },
+				{ key: 'save', label: t('save', 'Save credential'), primary: true, async action() { await saveEditor(); } }
+			]
+		});
+		const tokenDialog = dialogModule.createStandardDialog({
+			id: 'keyharbor-user-token',
+			className: 'keyharbor-app',
+			size: 'medium',
+			title: t('secret_title', 'Store this token now'),
+			content: tokenContent,
+			strings: { close: t('close', 'Close'), closeDialog: t('close', 'Close') },
+			closeOnEscape: false,
+			closeOnBackdrop: false,
+			closeButtonPlugin: { enabled: false },
+			statusPlugin: { renderEmpty: false },
+			buttons: [
+				{ key: 'copy', label: t('copy_token', 'Copy token'), async action() { await copyToken(); } },
+				{ key: 'close', label: t('stored_token', 'I stored the token'), primary: true, action() { closeToken(); } }
+			]
+		});
+		editorDialog.init();
+		tokenDialog.init();
+		tokenDialog.on('afterClose', () => {
+			tokenValue.textContent = '';
+			copyStatus.textContent = '';
+			tokenModeNote.textContent = '';
+			tokenModeNote.hidden = true;
+		});
 
 		async function postJson(payload) {
 			const response = await fetch(serviceUrl, {
@@ -148,10 +188,13 @@
 			fields.expiresAt.required = fields.expiresEnabled.checked;
 			fields.expiresAt.value = fields.expiresEnabled.checked ? toLocalDateTime(Number(credential.expires_at)) : '';
 			fields.notificationAddress.required = fields.expiresEnabled.checked;
-			editorTitle.textContent = existing ? t('editor_edit_title', 'Edit credential') : t('editor_create_title', 'Create credential');
-			saveButton.textContent = existing ? t('save_changes', 'Save changes') : t('create', 'Create credential');
+			editorDialog.execute('setTitle', existing ? t('editor_edit_title', 'Edit credential') : t('editor_create_title', 'Create credential'));
+			editorDialog.execute('setButtons', [
+				{ key: 'cancel', label: t('cancel', 'Cancel'), action: 'close' },
+				{ key: 'save', label: existing ? t('save_changes', 'Save changes') : t('create', 'Create credential'), primary: true, busyLabel: existing ? t('saving', 'Saving…') : t('creating', 'Creating…'), async action() { await saveEditor(); } }
+			]);
 			renderServiceOptions(existing ? credential : null);
-			openDialog(editorDialog);
+			editorDialog.open({ source: 'credentialEditor' });
 			window.setTimeout(() => fields.label.focus(), 0);
 		}
 
@@ -207,16 +250,14 @@
 				expires_at: expiresAt,
 				service_ids: Array.from(serviceList.querySelectorAll('[data-service-grant]:checked')).map((input) => input.value)
 			};
-			setButtonBusy(saveButton, true, payload.mode === 'create' ? t('creating', 'Creating…') : t('saving', 'Saving…'));
 			try {
 				const response = await postJson(payload);
-				closeDialog(editorDialog);
+				editorDialog.close({ source: 'credentialEditor' });
 				await loadCredentials(false);
 				if(response.token) { showToken(response.token, response.credential ? response.credential.auth_mode : 'bearer'); }
 				setNotice(payload.mode === 'create' ? t('created_success', 'Credential created.') : t('updated_success', 'Credential updated.'), 'success');
 			}
 			catch(error) { setEditorError(errorMessage(error)); }
-			finally { setButtonBusy(saveButton, false); }
 		}
 
 		function validateEditor() {
@@ -308,7 +349,7 @@
 			tokenModeNote.textContent = hmac
 				? t('hmac_usage', 'Use this token with X-BASE3-Timestamp, X-BASE3-Nonce and X-BASE3-Signature. Sign the canonical request with the token secret using HMAC-SHA256.')
 				: '';
-			openDialog(tokenDialog);
+			tokenDialog.open({ source: 'credentialToken' });
 			tokenValue.focus();
 		}
 
@@ -335,7 +376,7 @@
 		}
 
 		function closeToken() {
-			closeDialog(tokenDialog);
+			tokenDialog.close({ source: 'credentialToken' });
 			tokenValue.textContent = '';
 			copyStatus.textContent = '';
 			tokenModeNote.textContent = '';
@@ -430,31 +471,6 @@
 			return local.toISOString().slice(0, 16);
 		}
 
-		function setButtonBusy(button, busy, label) {
-			if(busy) {
-				button.dataset.originalLabel = button.textContent;
-				button.textContent = label || t('working', 'Working…');
-				button.disabled = true;
-			}
-			else {
-				button.textContent = button.dataset.originalLabel || button.textContent;
-				button.disabled = false;
-				delete button.dataset.originalLabel;
-			}
-		}
-
-		function openDialog(dialog) {
-			if(!dialog) { return; }
-			if(typeof dialog.showModal === 'function') { dialog.showModal(); }
-			else { dialog.setAttribute('open', 'open'); }
-		}
-
-		function closeDialog(dialog) {
-			if(!dialog) { return; }
-			if(typeof dialog.close === 'function') { dialog.close(); }
-			else { dialog.removeAttribute('open'); }
-		}
-
 		function element(tag, className) {
 			const node = document.createElement(tag);
 			if(className) { node.className = className; }
@@ -507,14 +523,9 @@
 			if(action === 'rotate') { rotateCredential(credentialId); }
 			if(action === 'revoke') { revokeCredential(credentialId); }
 			if(action === 'delete') { deleteCredential(credentialId); }
-			if(action === 'save-editor') { saveEditor(); }
-			if(action === 'close-editor') { closeDialog(editorDialog); }
-			if(action === 'copy-token') { copyToken(); }
-			if(action === 'close-token') { closeToken(); }
 		});
 
 		fields.expiresEnabled.addEventListener('change', toggleExpiration);
-		tokenDialog.addEventListener('cancel', (event) => event.preventDefault());
 		loadCredentials(false);
 	}
 

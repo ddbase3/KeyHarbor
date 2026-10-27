@@ -34,11 +34,13 @@ final class AjaxOnlyUiTest extends TestCase {
 				'translations' => $translations,
 				'service' => '/index.php?name=keyharboradmindisplay',
 				'cssUrl' => '/assets/keyharbor.css',
-				'scriptUrl' => '/assets/keyharboradmin.js'
+				'scriptUrl' => '/assets/keyharboradmin.js',
+				'dialogCssUrl' => '/assets/modulardialog.css',
+				'dialogJsUrl' => '/assets/modulardialog/index.js'
 			]);
 			$html = $renderer->render($pluginRoot . '/tpl/Display/KeyHarborAdminDisplay.php');
-			self::assertStringContainsString('data-service-editor', $html, basename($file));
-			self::assertStringContainsString('data-service-token-dialog', $html, basename($file));
+			self::assertStringContainsString('data-service-editor-content', $html, basename($file));
+			self::assertStringContainsString('data-service-token-content', $html, basename($file));
 			self::assertStringContainsString($translations['service_subject'], $html, basename($file));
 		}
 	}
@@ -58,6 +60,29 @@ final class AjaxOnlyUiTest extends TestCase {
 			$this->assertStringNotContainsString('type="submit"', strtolower($content));
 			$this->assertDoesNotMatchRegularExpression('/<a\\s/i', $content);
 		}
+	}
+
+	public function testEveryDialogUsesClientStackInsteadOfNativeDialogMarkup(): void {
+		$root = dirname(__DIR__, 2);
+		$manifest = json_decode((string)file_get_contents($root . '/base3.json'), true, 512, JSON_THROW_ON_ERROR);
+		self::assertArrayHasKey('ClientStack', $manifest['dependencies']);
+		foreach (['KeyManagementDisplay', 'KeyHarborAdminDisplay', 'EncryptionProfilesDisplay'] as $displayName) {
+			$display = (string)file_get_contents($root . '/src/Display/' . $displayName . '.php');
+			$template = (string)file_get_contents($root . '/tpl/Display/' . $displayName . '.php');
+			self::assertStringContainsString('plugin/ClientStack/assets/modulardialog/styles/modulardialog.css', $display);
+			self::assertStringContainsString('plugin/ClientStack/assets/modulardialog/index.js', $display);
+			self::assertStringContainsString('data-dialog-url=', $template);
+			self::assertStringNotContainsString('<dialog', $template);
+		}
+		foreach (['keymanagement.js', 'keyharboradmin.js', 'encryptionprofiles.js'] as $scriptName) {
+			$script = (string)file_get_contents($root . '/assets/keyharbor/' . $scriptName);
+			self::assertStringContainsString('await import(new URL(root.dataset.dialogUrl, document.baseURI).href)', $script);
+			self::assertStringContainsString('createStandardDialog(', $script);
+			self::assertStringNotContainsString('.showModal(', $script);
+		}
+		$script = (string)file_get_contents($root . '/assets/keyharbor/encryptionprofiles.js');
+		self::assertStringContainsString("editorContent.addEventListener('click', handleClick)", $script);
+		self::assertStringContainsString("if(action.dataset.action === 'add-key')", $script);
 	}
 
 	public function testDeleteActionsRemainAjaxOnly(): void {
@@ -100,7 +125,7 @@ final class AjaxOnlyUiTest extends TestCase {
 		self::assertStringContainsString('catch (CredentialHmacConfigurationException $exception)', $display);
 		self::assertStringContainsString("'error_code' => 'hmac_configuration'", $display);
 		self::assertStringContainsString('data-editor-notice', $template);
-		self::assertStringContainsString("editor.querySelector('[data-editor-notice]')", $script);
+		self::assertStringContainsString("editorContent.querySelector('[data-editor-notice]')", $script);
 		self::assertStringContainsString("'access_denied', 'hmac_configuration'", $script);
 		foreach (glob($root . '/lang/Display/*.ini') as $languageFile) {
 			$translations = (string)file_get_contents($languageFile);
@@ -141,6 +166,23 @@ final class AjaxOnlyUiTest extends TestCase {
 			foreach (array_unique($matches[1]) as $key) {
 				self::assertArrayHasKey($key, $translations, basename($languageFile) . ': ' . $key);
 			}
+		}
+	}
+
+	public function testFixedSecretIsGeneratedOnServerWithoutSecretFormField(): void {
+		$root = dirname(__DIR__, 2);
+		$script = (string)file_get_contents($root . '/assets/keyharbor/encryptionprofiles.js');
+		$service = (string)file_get_contents($root . '/src/Service/EncryptionProfileService.php');
+		self::assertStringNotContainsString("field(t('fixed_secret')", $script);
+		self::assertStringNotContainsString("data-prop=\"secret\"", $script);
+		self::assertStringContainsString("const autoActive = !state.editing", $script);
+		self::assertStringContainsString("$" . "incoming === []", $service);
+		self::assertStringContainsString('createEncryptedFixedKey()', $service);
+		self::assertStringContainsString('random_bytes(32)', $service);
+		foreach (glob($root . '/lang/Display/*.ini') as $file) {
+			$translations = parse_ini_file($file, true, INI_SCANNER_RAW)['keyharbor_encryption_display'];
+			self::assertNotEmpty($translations['fixed_key_id_hint'] ?? null, basename($file));
+			self::assertNotEmpty($translations['validation_fixed_managed'] ?? null, basename($file));
 		}
 	}
 

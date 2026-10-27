@@ -99,6 +99,9 @@ final class KeyHarborAdminDisplay implements IDisplay {
 			$this->assetResolver->resolve('plugin/KeyHarbor/assets/keyharbor/keyharboradmin.js')
 		);
 
+		$this->view->assign('dialogCssUrl', $this->assetResolver->resolve('plugin/ClientStack/assets/modulardialog/styles/modulardialog.css'));
+		$this->view->assign('dialogJsUrl', $this->assetResolver->resolve('plugin/ClientStack/assets/modulardialog/index.js'));
+
 		return $this->view->loadTemplate();
 	}
 

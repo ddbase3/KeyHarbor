@@ -268,7 +268,7 @@ The administration JSON endpoint uses the same AJAX JSON request restrictions fo
 
 The provided management JavaScript does not write the token to local storage, session storage, or cookies.
 
-The token is placed into the token dialog after a successful create or rotate action. The UI can copy it to the clipboard. When the dialog is closed, the displayed token text is cleared.
+The token is placed into the token dialog after a successful create or rotate action. The UI can copy it to the clipboard. When the dialog is closed, the displayed token text is cleared. KeyHarbor uses ClientStack ModularDialog for the user and administrator credential/token dialogs; its close lifecycle also clears token content when the dialog is dismissed via permitted keyboard or backdrop actions.
 
 Clipboard contents are controlled by the browser and operating system after the user chooses to copy the token.
 
@@ -349,6 +349,17 @@ and `configuration` sources keep only their source descriptions in settings.
 Decryption looks up a globally unique historical key ID and stored method;
 it is independent of the current target assignment. Losing an old key can
 permanently prevent decryption of existing data.
+
+## Do I need to enter a secret when creating a fixed encryption key?
+
+No. A new encryption profile can be saved with no key entries. KeyHarbor will
+create its first `fixed` key and a unique ID using server-side secure randomness,
+then encrypt the secret before storing it. If you use **Add key** and select
+`fixed`, you may leave the key ID blank and KeyHarbor generates it as well.
+No secret value is entered in the browser. This requires the separately
+configured `keyharbor.hmac_master_key`; keep that master key and all historic
+profile keys backed up. For external `env`, `file` and `configuration` sources,
+you must still supply the source name/path. Existing keys cannot be replaced.
 
 ## Why does saving a fixed encryption key report a master-key configuration error?
 

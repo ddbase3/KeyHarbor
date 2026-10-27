@@ -12,6 +12,7 @@ use CredentialFoundation\Dto\EncryptionTargetDefinition;
 use InvalidArgumentException;
 use KeyHarbor\Exception\CredentialHmacConfigurationException;
 use KeyHarbor\Exception\CredentialManagementException;
+use KeyHarbor\Exception\EncryptionProfileValidationException;
 use KeyHarbor\Service\CredentialManagementService;
 use KeyHarbor\Service\EncryptionProfileService;
 use Throwable;
@@ -70,6 +71,8 @@ final class EncryptionProfilesDisplay implements IDisplay {
 		$this->view->assign('service', $this->links->getLink(['name' => self::getName(), 'out' => 'json']));
 		$this->view->assign('cssUrl', $this->assets->resolve('plugin/KeyHarbor/assets/keyharbor/keyharbor.css'));
 		$this->view->assign('scriptUrl', $this->assets->resolve('plugin/KeyHarbor/assets/keyharbor/encryptionprofiles.js'));
+		$this->view->assign('dialogCssUrl', $this->assets->resolve('plugin/ClientStack/assets/modulardialog/styles/modulardialog.css'));
+		$this->view->assign('dialogJsUrl', $this->assets->resolve('plugin/ClientStack/assets/modulardialog/index.js'));
 		return $this->view->loadTemplate();
 	}
 
@@ -117,8 +120,10 @@ final class EncryptionProfilesDisplay implements IDisplay {
 			$response = ['ok' => false, 'error_code' => 'hmac_configuration'];
 		} catch (CredentialManagementException $exception) {
 			$response = ['ok' => false, 'error_code' => $exception->getReason()];
+		} catch (EncryptionProfileValidationException $exception) {
+			$response = ['ok' => false, 'error_code' => 'validation', 'validation_reason' => $exception->getReason()];
 		} catch (InvalidArgumentException $exception) {
-			$response = ['ok' => false, 'error_code' => 'validation', 'error' => $exception->getMessage()];
+			$response = ['ok' => false, 'error_code' => 'validation'];
 		} catch (Throwable $exception) {
 			$errorId = bin2hex(random_bytes(6));
 			$this->logger->error('KeyHarbor encryption administration request failed: ' . $exception->getMessage(), [

@@ -1,7 +1,7 @@
 (function() {
 	'use strict';
 
-	function init() {
+	async function init() {
 		const root = document.querySelector('[data-keyharbor-admin]');
 		if(!root) { return; }
 
@@ -16,23 +16,59 @@
 		const searchInput = root.querySelector('[data-filter="search"]');
 		const statusSelect = root.querySelector('[data-filter="status"]');
 		const state = { credentials: [], services: [] };
-		const serviceEditor = root.querySelector('[data-service-editor]');
-		const serviceEditorTitle = root.querySelector('[data-service-editor-title]');
-		const serviceEditorError = root.querySelector('[data-service-editor-error]');
-		const serviceOperations = root.querySelector('[data-service-operations]');
-		const serviceSave = root.querySelector('[data-service-save]');
-		const tokenDialog = root.querySelector('[data-service-token-dialog]');
-		const tokenValue = root.querySelector('[data-service-token-value]');
-		const copyStatus = root.querySelector('[data-service-copy-status]');
+		const serviceEditorContent = root.querySelector('[data-service-editor-content]');
+		const serviceTokenContent = root.querySelector('[data-service-token-content]');
+		const serviceEditorError = serviceEditorContent.querySelector('[data-service-editor-error]');
+		const serviceOperations = serviceEditorContent.querySelector('[data-service-operations]');
+		const tokenValue = serviceTokenContent.querySelector('[data-service-token-value]');
+		const copyStatus = serviceTokenContent.querySelector('[data-service-copy-status]');
 		const fields = {
-			id: root.querySelector('[data-service-field="credential_id"]'),
-			subject: root.querySelector('[data-service-field="subject_id"]'),
-			label: root.querySelector('[data-service-field="label"]'),
-			address: root.querySelector('[data-service-field="notification_address"]'),
-			language: root.querySelector('[data-service-field="notification_language"]'),
-			expiresEnabled: root.querySelector('[data-service-field="expires_enabled"]'),
-			expiresAt: root.querySelector('[data-service-field="expires_at"]')
+			id: serviceEditorContent.querySelector('[data-service-field="credential_id"]'),
+			subject: serviceEditorContent.querySelector('[data-service-field="subject_id"]'),
+			label: serviceEditorContent.querySelector('[data-service-field="label"]'),
+			address: serviceEditorContent.querySelector('[data-service-field="notification_address"]'),
+			language: serviceEditorContent.querySelector('[data-service-field="notification_language"]'),
+			expiresEnabled: serviceEditorContent.querySelector('[data-service-field="expires_enabled"]'),
+			expiresAt: serviceEditorContent.querySelector('[data-service-field="expires_at"]')
 		};
+
+		const dialogModule = await import(new URL(root.dataset.dialogUrl, document.baseURI).href);
+		serviceEditorContent.hidden = false;
+		serviceTokenContent.hidden = false;
+		const serviceEditor = dialogModule.createStandardDialog({
+			id: 'keyharbor-service-editor',
+			className: 'keyharbor-app',
+			size: 'large',
+			title: t('create_service'),
+			content: serviceEditorContent,
+			strings: { close: t('close'), closeDialog: t('close') },
+			closeButtonPlugin: { label: t('close'), ariaLabel: t('close') },
+			statusPlugin: { renderEmpty: false },
+			buttons: [
+				{ key: 'cancel', label: t('cancel'), action: 'close' },
+				{ key: 'save', label: t('save_service'), primary: true, async action() { await saveServiceEditor(); } }
+			]
+		});
+		const tokenDialog = dialogModule.createStandardDialog({
+			id: 'keyharbor-service-token',
+			className: 'keyharbor-app',
+			size: 'medium',
+			title: t('service_token_title'),
+			content: serviceTokenContent,
+			strings: { close: t('close'), closeDialog: t('close') },
+			closeButtonPlugin: { enabled: false },
+			statusPlugin: { renderEmpty: false },
+			buttons: [
+				{ key: 'copy', label: t('copy_service_token'), action() { copyServiceToken(); } },
+				{ key: 'close', label: t('close_service_token'), primary: true, action: 'close' }
+			]
+		});
+		serviceEditor.init();
+		tokenDialog.init();
+		tokenDialog.on('afterClose', () => {
+			tokenValue.textContent = '';
+			copyStatus.textContent = '';
+		});
 
 		async function postJson(payload) {
 			const response = await fetch(serviceUrl, {
@@ -237,9 +273,9 @@
 			fields.expiresEnabled.checked = existing && credential.expires_at !== null;
 			fields.expiresAt.disabled = !fields.expiresEnabled.checked;
 			fields.expiresAt.value = fields.expiresEnabled.checked ? toLocalDateTime(credential.expires_at) : '';
-			serviceEditorTitle.textContent = existing ? t('edit_service_title') : t('create_service');
+			serviceEditor.execute('setTitle', existing ? t('edit_service_title') : t('create_service'));
 			renderOperationOptions(existing ? credential.operation_grants : {});
-			serviceEditor.showModal();
+			serviceEditor.open({ source: 'serviceCredentialEditor' });
 			fields.label.focus();
 		}
 
@@ -307,16 +343,14 @@
 				expires_at: expiresAt,
 				operation_grants: grants
 			};
-			serviceSave.disabled = true;
 			try {
 				const response = await postJson(payload);
-				serviceEditor.close();
+				serviceEditor.close({ source: 'serviceCredentialEditor' });
 				await load(false);
 				if(response.token) { showServiceToken(response.token); }
 				setNotice(creating ? t('service_created') : t('service_updated'), 'success');
 			}
 			catch(error) { showEditorError(errorMessage(error)); }
-			finally { serviceSave.disabled = false; }
 		}
 
 		function showEditorError(message) {
@@ -340,8 +374,17 @@
 		function showServiceToken(token) {
 			tokenValue.textContent = String(token);
 			copyStatus.textContent = '';
-			tokenDialog.showModal();
+			tokenDialog.open({ source: 'serviceCredentialToken' });
 			tokenValue.focus();
+		}
+
+		function copyServiceToken() {
+			if(navigator.clipboard && tokenValue.textContent) {
+				navigator.clipboard.writeText(tokenValue.textContent).then(
+					() => { copyStatus.textContent = t('service_token_copied'); },
+					() => { copyStatus.textContent = t('service_token_copy_failed'); }
+				);
+			} else { copyStatus.textContent = t('service_token_copy_failed'); }
 		}
 
 		function toLocalDateTime(timestamp) {
@@ -354,10 +397,7 @@
 			fields.expiresAt.disabled = !fields.expiresEnabled.checked;
 			if(!fields.expiresEnabled.checked) { fields.expiresAt.value = ''; }
 		});
-		tokenDialog.addEventListener('close', () => {
-			tokenValue.textContent = '';
-			copyStatus.textContent = '';
-		});
+
 
 		function serviceById(serviceId) {
 			return state.services.find((service) => String(service.service_id || '') === String(serviceId)) || null;
@@ -445,17 +485,7 @@
 				if(credential && credential.subject_type === 'service') { openServiceEditor(credential); }
 			}
 			if(button.dataset.action === 'rotate-service') { rotateService(button.dataset.credentialId || ''); }
-			if(button.dataset.action === 'close-service-editor') { serviceEditor.close(); }
-			if(button.dataset.action === 'save-service') { saveServiceEditor(); }
-			if(button.dataset.action === 'close-service-token') { tokenDialog.close(); }
-			if(button.dataset.action === 'copy-service-token') {
-				if(navigator.clipboard && tokenValue.textContent) {
-					navigator.clipboard.writeText(tokenValue.textContent).then(
-						() => { copyStatus.textContent = t('service_token_copied'); },
-						() => { copyStatus.textContent = t('service_token_copy_failed'); }
-					);
-				} else { copyStatus.textContent = t('service_token_copy_failed'); }
-			}
+
 			if(button.dataset.action === 'revoke') { revoke(button.dataset.credentialId || ''); }
 			if(button.dataset.action === 'delete') { deleteCredential(button.dataset.credentialId || ''); }
 		});

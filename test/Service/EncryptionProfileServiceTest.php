@@ -95,19 +95,20 @@ final class EncryptionProfileServiceTest extends TestCase {
 		$store = new EncryptionTestSettingsStore();
 		$service = $this->service($store);
 		$data = $this->profile();
-		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed', 'secret' => str_repeat('s', 40)]];
+		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed']];
 		$service->saveProfileForAdmin($data);
 		$before = $store->get('keyharbor_encryption_profiles', 'profile-a');
+		$oldSecret = $service->getReadKey('xchacha20poly1305-v1', 'key-2026');
 		$newId = $service->rotateFixedKeyForAdmin('profile-a');
 		self::assertMatchesRegularExpression('/^key-[a-f0-9]{24}$/', $newId);
 		$after = $store->get('keyharbor_encryption_profiles', 'profile-a');
 		self::assertSame($before['keys']['key-2026'], $after['keys']['key-2026']);
 		self::assertSame($newId, $after['key_id']);
 		self::assertCount(2, $after['keys']);
-		self::assertSame(str_repeat('s', 40), $service->getReadKey('xchacha20poly1305-v1', 'key-2026'));
+		self::assertSame($oldSecret, $service->getReadKey('xchacha20poly1305-v1', 'key-2026'));
 		$newSecret = $service->getReadKey('xchacha20poly1305-v1', $newId);
 		self::assertGreaterThanOrEqual(32, strlen($newSecret));
-		self::assertNotSame(str_repeat('s', 40), $newSecret);
+		self::assertNotSame($oldSecret, $newSecret);
 		self::assertStringNotContainsString($newSecret, serialize($after));
 		$service->assignForAdmin('example:store', 'profile-a');
 		self::assertSame($newId, $service->getWriteKey('example:store')?->getKeyId());
@@ -117,7 +118,7 @@ final class EncryptionProfileServiceTest extends TestCase {
 		$store = new EncryptionTestSettingsStore();
 		$service = $this->service($store);
 		$data = $this->profile();
-		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed', 'secret' => str_repeat('s', 40)]];
+		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed']];
 		$service->saveProfileForAdmin($data);
 		$original = $store->get('keyharbor_encryption_profiles', 'profile-a');
 		$data['keys'][0]['secret'] = str_repeat('z', 40);
@@ -153,13 +154,15 @@ final class EncryptionProfileServiceTest extends TestCase {
 		$store = new EncryptionTestSettingsStore();
 		$service = $this->service($store);
 		$data = $this->profile();
-		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed', 'secret' => str_repeat('s', 40)]];
+		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed']];
 		$service->saveProfileForAdmin($data);
 		$raw = $store->get('keyharbor_encryption_profiles', 'profile-a');
+		$generatedSecret = $service->getReadKey('xchacha20poly1305-v1', 'key-2026');
+		self::assertGreaterThanOrEqual(32, strlen($generatedSecret));
 		self::assertArrayNotHasKey('secret', $raw['keys']['key-2026']);
-		self::assertStringNotContainsString(str_repeat('s', 40), serialize($raw));
+		self::assertStringNotContainsString($generatedSecret, serialize($raw));
 		self::assertArrayNotHasKey('ciphertext', $service->listProfilesForAdmin()[0]['keys'][0]);
-		self::assertSame(str_repeat('s', 40), $service->getReadKey('xchacha20poly1305-v1', 'key-2026'));
+		self::assertSame($generatedSecret, $service->getReadKey('xchacha20poly1305-v1', 'key-2026'));
 		$data['keys'][0]['secret'] = '';
 		$service->saveProfileForAdmin($data);
 		self::assertSame($raw, $store->get('keyharbor_encryption_profiles', 'profile-a'));
@@ -169,7 +172,7 @@ final class EncryptionProfileServiceTest extends TestCase {
 		$store = new EncryptionTestSettingsStore();
 		$service = $this->service($store, false);
 		$profile = $this->profile();
-		$profile['keys'] = [['id' => 'key-2026', 'mode' => 'fixed', 'secret' => str_repeat('s', 40)]];
+		$profile['keys'] = [['id' => 'key-2026', 'mode' => 'fixed']];
 		try {
 			$service->saveProfileForAdmin($profile);
 			self::fail('Expected missing master key configuration error.');
@@ -177,6 +180,78 @@ final class EncryptionProfileServiceTest extends TestCase {
 			self::assertStringContainsString('hmac_master_key', $exception->getMessage());
 		}
 		self::assertSame([], $store->getGroup('keyharbor_encryption_profiles'));
+	}
+
+	public function testNewProfileWithoutKeysGeneratesAndPersistsAnEncryptedFixedKey(): void {
+		$store = new EncryptionTestSettingsStore();
+		$service = $this->service($store);
+		$service->saveProfileForAdmin([
+			'id' => 'profile-auto', 'label' => 'Automatically protected',
+			'method' => 'xchacha20poly1305-v1', 'key_id' => '', 'keys' => []
+		]);
+		$raw = $store->get('keyharbor_encryption_profiles', 'profile-auto');
+		$keyId = $raw['key_id'];
+		self::assertMatchesRegularExpression('/^key-[a-f0-9]{24}$/', $keyId);
+		self::assertSame(['mode', 'ciphertext', 'nonce'], array_keys($raw['keys'][$keyId]));
+		$secret = $service->getReadKey('xchacha20poly1305-v1', $keyId);
+		self::assertGreaterThanOrEqual(32, strlen($secret));
+		self::assertStringNotContainsString($secret, serialize($raw));
+		self::assertArrayNotHasKey('ciphertext', $service->listProfilesForAdmin()[0]['keys'][0]);
+		$service->assignForAdmin('example:store', 'profile-auto');
+		self::assertSame($secret, $service->getWriteKey('example:store')?->getSecret());
+	}
+
+	public function testNewFixedEntryWithoutIdentifierOrSecretIsGeneratedAndDoesNotChangePriorKeys(): void {
+		$store = new EncryptionTestSettingsStore();
+		$service = $this->service($store);
+		$service->saveProfileForAdmin($this->profile());
+		$prior = $store->get('keyharbor_encryption_profiles', 'profile-a');
+		$updated = $this->profile();
+		$updated['keys'][] = ['id' => '', 'mode' => 'fixed'];
+		$service->saveProfileForAdmin($updated);
+		$after = $store->get('keyharbor_encryption_profiles', 'profile-a');
+		self::assertSame($prior['keys']['key-2026'], $after['keys']['key-2026']);
+		self::assertSame('key-2026', $after['key_id']);
+		self::assertCount(2, $after['keys']);
+		$newId = array_values(array_diff(array_keys($after['keys']), ['key-2026']))[0];
+		self::assertMatchesRegularExpression('/^key-[a-f0-9]{24}$/', $newId);
+		self::assertGreaterThanOrEqual(32, strlen($service->getReadKey('xchacha20poly1305-v1', $newId)));
+	}
+
+	public function testNewSingleFixedEntryAutomaticallyBecomesActiveWithoutAnIdentifier(): void {
+		$service = $this->service();
+		$service->saveProfileForAdmin([
+			'id' => 'profile-new', 'label' => 'Fixed test',
+			'method' => 'xchacha20poly1305-v1', 'key_id' => '',
+			'keys' => [['id' => '', 'mode' => 'fixed']]
+		]);
+		$profile = $service->listProfilesForAdmin()[0];
+		self::assertMatchesRegularExpression('/^key-[a-f0-9]{24}$/', $profile['key_id']);
+		self::assertSame($profile['key_id'], $profile['keys'][0]['id']);
+	}
+
+	public function testFixedKeyWithExplicitIdSavesWithoutManuallyEnteredSecret(): void {
+		$store = new EncryptionTestSettingsStore();
+		$service = $this->service($store);
+		$service->saveProfileForAdmin([
+			'id' => 'profile-fixed', 'label' => 'Fixed generated',
+			'method' => 'xchacha20poly1305-v1', 'key_id' => 'key-custom',
+			'keys' => [['id' => 'key-custom', 'mode' => 'fixed']]
+		]);
+		$stored = $store->get('keyharbor_encryption_profiles', 'profile-fixed');
+		self::assertSame('key-custom', $stored['key_id']);
+		self::assertSame('fixed', $stored['keys']['key-custom']['mode']);
+		self::assertGreaterThanOrEqual(32, strlen($service->getReadKey('xchacha20poly1305-v1', 'key-custom')));
+	}
+
+	public function testRejectsManuallySuppliedFixedSecretInsteadOfSilentlyReplacingIt(): void {
+		$store = new EncryptionTestSettingsStore();
+		$service = $this->service($store);
+		$this->expectException(InvalidArgumentException::class);
+		$this->expectExceptionMessage('generated by KeyHarbor');
+		$data = $this->profile();
+		$data['keys'] = [['id' => 'key-2026', 'mode' => 'fixed', 'secret' => str_repeat('s', 40)]];
+		$service->saveProfileForAdmin($data);
 	}
 
 	public function testReadKeyMustMatchStoredEncryptionMethod(): void {
