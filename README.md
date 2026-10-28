@@ -411,6 +411,14 @@ nonce
 sha256_hex_of_raw_body
 ```
 
+The raw query string is taken from the URL actually requested by the client,
+without the leading `?`, preserving its exact encoding, parameter order and
+repeated keys. If the requested URL has no query, this canonical field is
+empty. Internal web-server rewrites (for example Apache's `index.php?name=...`
+route parameters) must not become part of the signature. In particular, PHP's
+`QUERY_STRING` may contain rewritten routing parameters and is not used for
+this canonical field.
+
 The signature is lowercase hexadecimal HMAC-SHA256 over that canonical string,
 using the secret part of the one-time token. Consumers transmit the complete
 credential token plus `X-BASE3-Timestamp`, `X-BASE3-Nonce` and

@@ -85,7 +85,7 @@ final class KeyHarborAuthenticationTest extends TestCase {
 				'HTTP_X_BASE3_SIGNATURE' => str_repeat('a', 64),
 				'REQUEST_METHOD' => 'POST',
 				'REQUEST_URI' => '/api/example?mode=write',
-				'QUERY_STRING' => 'mode=write'
+				'QUERY_STRING' => 'name=api&out=example&mode=write'
 			]),
 			$access
 		);
@@ -98,6 +98,86 @@ final class KeyHarborAuthenticationTest extends TestCase {
 		self::assertSame(1785163584, $access->hmacRequest?->getTimestamp());
 		self::assertSame('nonce-1', $access->hmacRequest?->getNonce());
 		self::assertSame(0, $access->serviceAuthorizations);
+	}
+
+	public function testHmacIgnoresInternalRewriteQueryForUrlWithoutQuery(): void {
+		$access = new AuthenticationTestCredentialAccess(
+			CredentialIdentityResult::success('credential-1', 42)
+		);
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest([
+				'HTTP_AUTHORIZATION' => 'Bearer b3k_public_secret',
+				'HTTP_X_BASE3_TIMESTAMP' => '1785163584',
+				'HTTP_X_BASE3_NONCE' => 'nonce-1',
+				'HTTP_X_BASE3_SIGNATURE' => str_repeat('a', 64),
+				'REQUEST_METHOD' => 'POST',
+				'REQUEST_URI' => '/entitydatamicroservice.json',
+				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&name=index&out=php'
+			]),
+			$access
+		);
+
+		self::assertSame(42, $authentication->login());
+		self::assertInstanceOf(HmacAuthenticationRequest::class, $access->hmacRequest);
+		self::assertSame('/entitydatamicroservice.json', $access->hmacRequest?->getPath());
+		self::assertSame('', $access->hmacRequest?->getQueryString());
+	}
+
+	public function testHmacPreservesRawQueryEncodingAndRepeatedParameters(): void {
+		$access = new AuthenticationTestCredentialAccess(
+			CredentialIdentityResult::success('credential-1', 42)
+		);
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest([
+				'HTTP_AUTHORIZATION' => 'Bearer b3k_public_secret',
+				'HTTP_X_BASE3_TIMESTAMP' => '1785163584',
+				'HTTP_X_BASE3_NONCE' => 'nonce-2',
+				'HTTP_X_BASE3_SIGNATURE' => str_repeat('b', 64),
+				'REQUEST_METHOD' => 'POST',
+				'REQUEST_URI' => '/entitydatamicroservice.json?tag=a%2Bb&tag=two&empty=&flag',
+				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&tag=a%2Bb&tag=two&empty=&flag'
+			]),
+			$access
+		);
+
+		self::assertSame(42, $authentication->login());
+		self::assertSame('tag=a%2Bb&tag=two&empty=&flag', $access->hmacRequest?->getQueryString());
+	}
+
+	public function testHmacSignatureVerifiesAgainstExternallyRequestedUri(): void {
+		$token = 'b3k_public_secret';
+		$timestamp = 1785163584;
+		$nonce = 'nonce-rewrite';
+		$secret = 'test-secret';
+		$signer = new \KeyHarbor\Security\HmacRequestSigner();
+		$signature = $signer->sign(new HmacAuthenticationRequest(
+			$token,
+			'POST',
+			'/entitydatamicroservice.json',
+			'',
+			$timestamp,
+			$nonce,
+			str_repeat('0', 64)
+		), $secret);
+		$access = new AuthenticationTestCredentialAccess(
+			CredentialIdentityResult::success('credential-1', 42)
+		);
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest([
+				'HTTP_AUTHORIZATION' => 'Bearer ' . $token,
+				'HTTP_X_BASE3_TIMESTAMP' => (string)$timestamp,
+				'HTTP_X_BASE3_NONCE' => $nonce,
+				'HTTP_X_BASE3_SIGNATURE' => $signature,
+				'REQUEST_METHOD' => 'POST',
+				'REQUEST_URI' => '/entitydatamicroservice.json',
+				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&name=index&out=php'
+			]),
+			$access
+		);
+
+		self::assertSame(42, $authentication->login());
+		self::assertInstanceOf(HmacAuthenticationRequest::class, $access->hmacRequest);
+		self::assertTrue($signer->verify($access->hmacRequest, $secret));
 	}
 }
 

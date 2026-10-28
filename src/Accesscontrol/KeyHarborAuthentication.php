@@ -73,7 +73,7 @@ final class KeyHarborAuthentication extends AbstractAuth {
 				$token,
 				(string)$this->request->server('REQUEST_METHOD', 'GET'),
 				$this->getRequestPath(),
-				(string)$this->request->server('QUERY_STRING', ''),
+				$this->getRequestQueryString(),
 				$timestamp,
 				$nonce,
 				$signature,
@@ -129,6 +129,15 @@ final class KeyHarborAuthentication extends AbstractAuth {
 		}
 
 		return $path;
+	}
+
+	/**
+	 * Read the externally requested query, not the server's internally rewritten QUERY_STRING.
+	 */
+	private function getRequestQueryString(): string {
+		$requestUri = (string)$this->request->server('REQUEST_URI', '/');
+		$query = parse_url($requestUri, PHP_URL_QUERY);
+		return is_string($query) ? $query : '';
 	}
 
 	private function getRawBody(): string {

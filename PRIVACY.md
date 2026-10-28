@@ -84,7 +84,7 @@ For an HMAC-authenticated request, KeyHarbor processes:
 - full credential token from the Authorization header
 - request method
 - request path
-- raw query string
+- original raw query string from the client-requested URL (not internal server rewrite parameters)
 - Unix timestamp header
 - nonce header
 - HMAC signature header
