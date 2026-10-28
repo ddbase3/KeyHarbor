@@ -599,3 +599,23 @@ error states, and existing dialog/action semantics):
 ```sh
 php plugin/KeyHarbor/test/Display/EncryptionProfilesHeaderSmoke.php
 ```
+
+## Resource constraint grant draft (phase 1 integration pending)
+
+The existing credential grant table is extended by migration 003 with nullable
+`constraints_json`. The value is a map from granted operation name to versioned
+resource expression, scoped by the grant's existing `service_id`. The admin JSON
+endpoint accepts `resource_constraints` keyed by service and operation and validates
+expressions against the service provider's declared resource attributes. The admin
+editor currently provides an explicit JSON input for these conditions.
+
+This implementation stores declarations only. It does not execute or implicitly
+authorize any resource query. Consumers requiring a resource grant must reject
+missing constraints and must validate and compile the expression against their
+own query owner. No entity access is implied by the operation grant alone.
+
+The migration adds a nullable column without modifying existing operation grants.
+Older credentials have no resource constraints. This is an in-progress source
+snapshot, not a production-ready authorization change. Full XRM enforcement,
+translations beyond English/German, persistent integration tests, and runtime
+release testing are pending.

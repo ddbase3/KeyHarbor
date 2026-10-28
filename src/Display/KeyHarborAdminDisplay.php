@@ -186,7 +186,8 @@ class KeyHarborAdminDisplay implements IDisplay {
 				$this->readString($payload, 'notification_address'),
 				$this->readString($payload, 'notification_language'),
 				$this->readNullableTimestamp($payload, 'expires_at'),
-				$this->readOperationGrants($payload)
+				$this->readOperationGrants($payload),
+				$this->readResourceConstraints($payload)
 			);
 			return $this->issuedResponse('created', $issued);
 		}
@@ -198,7 +199,8 @@ class KeyHarborAdminDisplay implements IDisplay {
 				$this->readString($payload, 'notification_address'),
 				$this->readString($payload, 'notification_language'),
 				$this->readNullableTimestamp($payload, 'expires_at'),
-				$this->readOperationGrants($payload)
+				$this->readOperationGrants($payload),
+				$this->readResourceConstraints($payload)
 			);
 			return [
 				'ok' => true,
@@ -266,6 +268,7 @@ class KeyHarborAdminDisplay implements IDisplay {
 			'subject_type' => $credential->getSubject()->getType(),
 			'subject_id' => $credential->getSubject()->getId(),
 			'operation_grants' => $credential->getOperationGrants(),
+			'resource_constraints' => $credential->getResourceConstraints(),
 			'owner_user_id' => $credential->getOwnerUserId(),
 			'owner_login' => $credential->getOwnerLogin(),
 			'owner_name' => $credential->getOwnerName(),
@@ -306,6 +309,15 @@ class KeyHarborAdminDisplay implements IDisplay {
 	 * @param array<string,mixed> $payload
 	 * @return array<string,array<int,string>>
 	 */
+	/** @return array<string,array<string,array<string,mixed>>> */
+	private function readResourceConstraints(array $payload): array {
+		$raw = $payload['resource_constraints'] ?? [];
+		if (!is_array($raw) || ($raw !== [] && array_is_list($raw))) {
+			throw new InvalidArgumentException('Resource constraints must be a keyed object.');
+		}
+		return $raw;
+	}
+
 	private function readOperationGrants(array $payload): array {
 		$raw = $payload['operation_grants'] ?? null;
 		if (!is_array($raw) || array_is_list($raw)) {

@@ -161,13 +161,15 @@ final class CredentialManagementService {
 		string $notificationAddress,
 		string $notificationLanguage,
 		?int $expiresAt,
-		array $operationGrants
+		array $operationGrants,
+		array $resourceConstraints = []
 	): IssuedCredential {
 		$this->requireAdmin();
 		$actor = $this->getCurrentUser();
 		$subject = new CredentialSubject(CredentialSubject::TYPE_SERVICE, $serviceSubjectId);
 		$expiresAt = $this->normalizeExpiresAt($expiresAt);
 		$grants = $this->normalizeOperationGrants($operationGrants);
+		$constraints = $this->normalizeResourceConstraints($resourceConstraints, $grants);
 		$generatedToken = $this->tokenService->generate();
 		$encryptedSecret = $this->secretCipher->encrypt($generatedToken->getSecret());
 		$ownerLogin = trim((string)($actor->userid ?? ''));
@@ -190,7 +192,8 @@ final class CredentialManagementService {
 			time(), $expiresAt, null, null, null,
 			array_keys($grants),
 			$subject,
-			$grants
+			$grants,
+			$constraints
 		);
 		$this->repository->insert($credential);
 		return new IssuedCredential($credential, $generatedToken);
@@ -215,7 +218,8 @@ final class CredentialManagementService {
 		string $notificationAddress,
 		string $notificationLanguage,
 		?int $expiresAt,
-		array $operationGrants
+		array $operationGrants,
+		array $resourceConstraints = []
 	): ApiCredential {
 		$this->requireAdmin();
 		$credential = $this->requireServiceCredential($credentialId);
@@ -223,6 +227,7 @@ final class CredentialManagementService {
 			throw new CredentialManagementException(CredentialManagementException::REVOKED, 'Revoked credentials cannot be edited.');
 		}
 		$grants = $this->normalizeOperationGrants($operationGrants);
+		$constraints = $this->normalizeResourceConstraints($resourceConstraints, $grants);
 		$expiresAt = $this->normalizeExpiresAt($expiresAt, $credential);
 		$updated = $credential->withManagementData(
 			$this->normalizeLabel($label),
@@ -230,7 +235,8 @@ final class CredentialManagementService {
 			$this->normalizeNotificationLanguage($notificationLanguage, $credential->getNotificationLanguage()),
 			$expiresAt,
 			array_keys($grants),
-			$grants
+			$grants,
+			$constraints
 		);
 		if (!$this->repository->update($updated)) {
 			throw $this->notFound();
@@ -277,6 +283,34 @@ final class CredentialManagementService {
 	 * @param array<string,array<int,string>> $operationGrants
 	 * @return array<string,array<int,string>>
 	 */
+	/**
+	 * @param array<string,array<string,array<string,mixed>>> $constraints
+	 * @param array<string,array<int,string>> $grants
+	 * @return array<string,array<string,array<string,mixed>>>
+	 */
+	private function normalizeResourceConstraints(array $constraints, array $grants): array {
+		$validator = new ResourceConstraintValidator();
+		$normalized = [];
+		foreach ($constraints as $serviceId => $operations) {
+			if (!is_string($serviceId) || !isset($grants[$serviceId]) || !is_array($operations) || array_is_list($operations)) {
+				throw new InvalidArgumentException('Resource constraints require a granted service.');
+			}
+			$service = $this->serviceCatalog->getService($serviceId);
+			if ($service === null || $service->getResourceAttributes() === []) {
+				throw new InvalidArgumentException('Service does not declare resource attributes.');
+			}
+			foreach ($operations as $operation => $expression) {
+				if (!is_string($operation) || !in_array($operation, $grants[$serviceId], true) || !is_array($expression)) {
+					throw new InvalidArgumentException('Resource constraint operation is not granted.');
+				}
+				$normalized[$serviceId][$operation] = $validator->validate($expression, $service);
+			}
+			ksort($normalized[$serviceId], SORT_STRING);
+		}
+		ksort($normalized, SORT_STRING);
+		return $normalized;
+	}
+
 	private function normalizeOperationGrants(array $operationGrants): array {
 		if ($operationGrants === []) {
 			throw new InvalidArgumentException('Select at least one service with explicit operations.');

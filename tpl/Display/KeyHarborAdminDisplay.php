@@ -112,6 +112,11 @@ $t = static function(string $key) use ($translations): string {
 			</label>
 			<input type="datetime-local" data-service-field="expires_at" disabled>
 		</div>
+		<label class="keyharbor-field">
+			<span><?php echo $e($t('resource_constraints')); ?></span>
+			<textarea data-service-field="resource_constraints" rows="8" spellcheck="false" aria-describedby="keyharbor-constraint-help"></textarea>
+			<small id="keyharbor-constraint-help"><?php echo $e($t('resource_constraints_help')); ?></small>
+		</label>
 		<fieldset class="keyharbor-service-fieldset">
 			<legend><?php echo $e($t('service_operations')); ?></legend>
 			<p><?php echo $e($t('service_operations_help')); ?></p>

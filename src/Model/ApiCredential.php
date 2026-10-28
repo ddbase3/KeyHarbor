@@ -18,6 +18,9 @@ final class ApiCredential {
 	/** @var array<string,array<int,string>> */
 	private readonly array $operationGrants;
 
+	/** @var array<string,array<string,array<string,mixed>>> */
+	private readonly array $resourceConstraints;
+
 	private readonly CredentialSubject $subject;
 
 	/**
@@ -43,7 +46,8 @@ final class ApiCredential {
 		private readonly ?int $expiryNotifiedAt,
 		array $serviceIds,
 		?CredentialSubject $subject = null,
-		array $operationGrants = []
+		array $operationGrants = [],
+		array $resourceConstraints = []
 	) {
 		if (!preg_match('/^[a-f0-9]{32}$/', $this->id)) {
 			throw new InvalidArgumentException('Credential ids must contain 32 lowercase hexadecimal characters.');
@@ -126,6 +130,17 @@ final class ApiCredential {
 		}
 		ksort($normalizedOperations, SORT_STRING);
 		$this->operationGrants = $normalizedOperations;
+		foreach ($resourceConstraints as $serviceId => $byOperation) {
+			if (!isset($normalizedOperations[$serviceId]) || !is_array($byOperation)) {
+				throw new InvalidArgumentException('Resource constraints require a granted service.');
+			}
+			foreach ($byOperation as $operation => $constraint) {
+				if (!in_array($operation, $normalizedOperations[$serviceId], true) || !is_array($constraint)) {
+					throw new InvalidArgumentException('Resource constraints require a granted operation.');
+				}
+			}
+		}
+		$this->resourceConstraints = $resourceConstraints;
 	}
 
 	public function getId(): string {
@@ -150,6 +165,16 @@ final class ApiCredential {
 	/** @return array<string,array<int,string>> Exact per-service operation grants. */
 	public function getOperationGrants(): array {
 		return $this->operationGrants;
+	}
+
+	/** @return array<string,array<string,array<string,mixed>>> */
+	public function getResourceConstraints(): array {
+		return $this->resourceConstraints;
+	}
+
+	/** @return array<string,mixed>|null */
+	public function getResourceConstraint(string $serviceId, string $operation): ?array {
+		return $this->resourceConstraints[$serviceId][$operation] ?? null;
 	}
 
 	public function hasOperation(string $serviceId, string $operation): bool {
@@ -250,7 +275,8 @@ final class ApiCredential {
 		string $notificationLanguage,
 		?int $expiresAt,
 		array $serviceIds,
-		?array $operationGrants = null
+		?array $operationGrants = null,
+		?array $resourceConstraints = null
 	): self {
 		$expiryChanged = $expiresAt !== $this->expiresAt;
 
@@ -274,7 +300,8 @@ final class ApiCredential {
 			$expiryChanged ? null : $this->expiryNotifiedAt,
 			$serviceIds,
 			$this->subject,
-			$operationGrants ?? array_intersect_key($this->operationGrants, array_flip($serviceIds))
+			$operationGrants ?? array_intersect_key($this->operationGrants, array_flip($serviceIds)),
+		$resourceConstraints ?? array_intersect_key($this->resourceConstraints, array_flip($serviceIds))
 		);
 	}
 
@@ -304,7 +331,8 @@ final class ApiCredential {
 			$this->expiryNotifiedAt,
 			$this->serviceIds,
 			$this->subject,
-			$this->operationGrants
+			$this->operationGrants,
+			$this->resourceConstraints
 		);
 	}
 
@@ -329,7 +357,8 @@ final class ApiCredential {
 			$this->expiryNotifiedAt,
 			$this->serviceIds,
 			$this->subject,
-			$this->operationGrants
+			$this->operationGrants,
+			$this->resourceConstraints
 		);
 	}
 }

@@ -42,6 +42,7 @@ The grant table stores:
 - granted service id
 - creation timestamp
 - optional JSON list of specifically granted service operations (exact method names)
+- optional versioned resource-constraint JSON per granted operation in `constraints_json`; this can contain resource attributes and values configured by the administrator
 
 Owner identifiers, login names, display names, notification addresses, and user-defined labels can be personal data.
 

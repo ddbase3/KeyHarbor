@@ -273,14 +273,18 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 	private function insertGrants(ApiCredential $credential): void {
 		foreach ($credential->getServiceIds() as $serviceId) {
 			$operations = $credential->getOperationGrants();
+			$constraints = $credential->getResourceConstraints();
+			$constraintsJson = isset($constraints[$serviceId])
+				? $this->quote((string)json_encode($constraints[$serviceId], JSON_THROW_ON_ERROR))
+				: 'NULL';
 			$json = isset($operations[$serviceId])
 				? $this->quote((string)json_encode($operations[$serviceId], JSON_THROW_ON_ERROR))
 				: 'NULL';
 			$this->database->nonQuery(
-			'INSERT INTO ' . self::TABLE_GRANT . ' (credential_id, service_id, created_at, operations_json) VALUES (' .
+			'INSERT INTO ' . self::TABLE_GRANT . ' (credential_id, service_id, created_at, operations_json, constraints_json) VALUES (' .
 				$this->quote($credential->getId()) . ', ' .
 				$this->quote($serviceId) . ', ' .
-				$credential->getCreatedAt() . ', ' . $json . ')'
+				$credential->getCreatedAt() . ', ' . $json . ', ' . $constraintsJson . ')'
 			);
 		}
 	}
@@ -296,7 +300,7 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 
 		$quotedIds = array_map(fn(string $id): string => $this->quote($id), $credentialIds);
 		$rows = $this->database->multiQuery(
-			'SELECT credential_id, service_id, operations_json FROM ' . self::TABLE_GRANT .
+			'SELECT credential_id, service_id, operations_json, constraints_json FROM ' . self::TABLE_GRANT .
 			' WHERE credential_id IN (' . implode(', ', $quotedIds) . ')' .
 			' ORDER BY service_id ASC'
 		);
@@ -312,6 +316,13 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 					throw new \UnexpectedValueException('Stored operation grants must be JSON lists.');
 				}
 				$grants[$credentialId]['operation_grants'][$serviceId] = $operations;
+			}
+			if (isset($row['constraints_json']) && $row['constraints_json'] !== null) {
+				$constraints = json_decode((string)$row['constraints_json'], true, 512, JSON_THROW_ON_ERROR);
+				if (!is_array($constraints) || array_is_list($constraints)) {
+					throw new \UnexpectedValueException('Stored resource constraints must be keyed objects.');
+				}
+				$grants[$credentialId]['resource_constraints'][$serviceId] = $constraints;
 			}
 		}
 		return $grants;
@@ -346,7 +357,8 @@ final class DatabaseCredentialRepository implements ICredentialRepository {
 			$this->nullableInt($row['expiry_notified_at'] ?? null),
 			$grants['service_ids'] ?? [],
 			new CredentialSubject($subjectType, $subjectId),
-			$grants['operation_grants'] ?? []
+			$grants['operation_grants'] ?? [],
+			$grants['resource_constraints'] ?? []
 		);
 	}
 

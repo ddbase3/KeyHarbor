@@ -20,6 +20,7 @@
 		const serviceTokenContent = root.querySelector('[data-service-token-content]');
 		const serviceEditorError = serviceEditorContent.querySelector('[data-service-editor-error]');
 		const serviceOperations = serviceEditorContent.querySelector('[data-service-operations]');
+		const resourceConstraintsInput = serviceEditorContent.querySelector('[data-service-field="resource_constraints"]');
 		const tokenValue = serviceTokenContent.querySelector('[data-service-token-value]');
 		const copyStatus = serviceTokenContent.querySelector('[data-service-copy-status]');
 		const fields = {
@@ -275,6 +276,8 @@
 			fields.expiresAt.value = fields.expiresEnabled.checked ? toLocalDateTime(credential.expires_at) : '';
 			serviceEditor.execute('setTitle', existing ? t('edit_service_title') : t('create_service'));
 			renderOperationOptions(existing ? credential.operation_grants : {});
+			const storedConstraints = existing ? credential.resource_constraints : null;
+			resourceConstraintsInput.value = JSON.stringify(storedConstraints && !Array.isArray(storedConstraints) && typeof storedConstraints === 'object' ? storedConstraints : {}, null, 2);
 			serviceEditor.open({ source: 'serviceCredentialEditor' });
 			fields.label.focus();
 		}
@@ -332,6 +335,12 @@
 				showEditorError(t('service_invalid_expiration'));
 				return;
 			}
+			let resourceConstraints;
+			try {
+				resourceConstraints = JSON.parse(resourceConstraintsInput.value.trim() || '{}');
+				if(!resourceConstraints || Array.isArray(resourceConstraints) || typeof resourceConstraints !== 'object') { throw new Error(); }
+			}
+			catch(error) { showEditorError(t('resource_constraints_invalid')); return; }
 			const creating = !fields.id.value;
 			const payload = {
 				mode: creating ? 'create_service' : 'update_service',
@@ -341,7 +350,8 @@
 				notification_address: fields.address.value.trim(),
 				notification_language: fields.language.value.trim(),
 				expires_at: expiresAt,
-				operation_grants: grants
+				operation_grants: grants,
+				resource_constraints: resourceConstraints
 			};
 			try {
 				const response = await postJson(payload);
