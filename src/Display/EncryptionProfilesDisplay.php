@@ -2,6 +2,9 @@
 
 namespace KeyHarbor\Display;
 
+use Base3\Usermanager\Permission;
+use Base3\Authorization\Dto\AuthorizationRequest;
+use Base3\Authorization\Api\IAuthorizationService;
 use Base3\Api\IAssetResolver;
 use Base3\Api\IDisplay;
 use Base3\Api\IMvcView;
@@ -27,7 +30,8 @@ final class EncryptionProfilesDisplay implements IDisplay {
 		private readonly ILinkTargetService $links,
 		private readonly ILogger $logger,
 		private readonly CredentialManagementService $management,
-		private readonly EncryptionProfileService $encryption
+		private readonly EncryptionProfileService $encryption,
+		private readonly IAuthorizationService $settingsAuthorization
 	) {}
 
 	public static function getName(): string {
@@ -37,6 +41,14 @@ final class EncryptionProfilesDisplay implements IDisplay {
 	public function setData($data) {}
 
 	public function getOutput(string $out = 'html', bool $final = false): string {
+		if (!$this->settingsAuthorization->decide(new AuthorizationRequest(
+			$this->settingsAuthorization->getDefaultAuthority(),
+			Permission::for('feature', \KeyHarbor\SettingsTab\EncryptionprofilesSettingsTab::getName())
+		))->isAllowed()) {
+			http_response_code(403);
+			return '';
+		}
+
 		if (strtolower($out) === 'json') {
 			return $this->handleJson($final);
 		}

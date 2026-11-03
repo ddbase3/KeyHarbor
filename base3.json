@@ -15,8 +15,9 @@
 	"repository": "https://github.com/ddbase3/KeyHarbor",
 	"dependencies": {
 		"Base3Framework": ">=4.10.0",
+		"ClientStack": ">=4.23.0",
 		"CredentialFoundation": ">=4.2.0",
 		"MessagingFoundation": ">=4.2.0",
-		"ClientStack": ">=4.23.0"
+		"UiFoundation": ">=4.3.0"
 	}
 }

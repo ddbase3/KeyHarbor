@@ -439,3 +439,12 @@ permitted. Copying a token still places it in the operating-system clipboard,
 which KeyHarbor cannot delete. No dialog content is written to browser
 persistent storage by this integration. Deployment-specific accessibility
 verification remains necessary and is not implied by the component switch.
+
+## Settings tab feature access
+
+KeyHarbor's personal credentials and administration Settings entries use
+feature decisions and plugin-local translations. Direct KeyHarbor display
+HTML/JSON entry points check the associated feature. The existing
+credential service remains responsible for owner isolation, secret
+handling, retention and revocation; a visible tab does not grant access to
+other users' credentials.

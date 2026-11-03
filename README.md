@@ -619,3 +619,15 @@ Older credentials have no resource constraints. This is an in-progress source
 snapshot, not a production-ready authorization change. Full XRM enforcement,
 translations beyond English/German, persistent integration tests, and runtime
 release testing are pending.
+
+## Discoverable Settings entries
+
+KeyHarbor owns the Credentials root tab and its My Credentials, KeyHarbor
+Administration, Service Administration, and Encryption Profiles children.
+`src/SettingsTab/` supplies their feature declarations and
+`KeyHarbor/lang/Settings/` owns every label and description. The personal
+credentials entry defaults to the existing `base3authenticatedcriterion`
+audience; other administrative entries default to `administration`. Direct
+HTML/JSON endpoints check their feature before executing operations. The
+credential service's existing owner and subject checks remain in force.
+External demo tabs belong to the demo's own provider plugin.

@@ -15,6 +15,10 @@ final class KeyHarborServiceAdminDisplay extends KeyHarborAdminDisplay {
 		return 'keyharborserviceadmindisplay';
 	}
 
+	protected function settingsTabFeatureName(): string {
+		return \KeyHarbor\SettingsTab\KeyharborserviceadminSettingsTab::getName();
+	}
+
 	protected function isServiceOnly(): bool {
 		return true;
 	}
