@@ -71,65 +71,6 @@ final class CredentialSecretCipherTest extends TestCase {
 	}
 }
 
-final class CipherTestConfiguration implements IConfiguration {
+require_once __DIR__ . '/CipherTestConfiguration.php';
 
-	public function __construct(
-		private readonly mixed $masterKey
-	) {}
-
-	public function get($configuration = '') { return []; }
-	public function set($data, $configuration = ''): void {}
-	public function save(): void {}
-	public function getGroup(string $group, array $default = []): array { return $default; }
-	public function getValue(string $group, string $key, $default = null) {
-		return $group === 'keyharbor' && $key === 'hmac_master_key'
-			? $this->masterKey
-			: $default;
-	}
-	public function getString(string $group, string $key, string $default = ''): string { return $default; }
-	public function getInt(string $group, string $key, int $default = 0): int { return $default; }
-	public function getFloat(string $group, string $key, float $default = 0.0): float { return $default; }
-	public function getBool(string $group, string $key, bool $default = false): bool { return $default; }
-	public function getArray(string $group, string $key, array $default = []): array { return $default; }
-	public function hasGroup(string $group): bool { return $group === 'keyharbor'; }
-	public function hasValue(string $group, string $key): bool {
-		return $group === 'keyharbor' && $key === 'hmac_master_key';
-	}
-	public function setValue(string $group, string $key, $value): void {}
-	public function setGroup(string $group, array $values, bool $merge = true): void {}
-	public function setMany(array $data, bool $merge = true): void {}
-	public function removeGroup(string $group): void {}
-	public function removeValue(string $group, string $key): void {}
-	public function isDirty(): bool { return false; }
-	public function saveIfDirty(): bool { return true; }
-	public function trySave(): bool { return true; }
-	public function reload(): void {}
-	public function persistValue(string $group, string $key, $value): bool { return true; }
-}
-
-final class CipherTestConfigValueResolver implements IConfigValueResolver {
-
-	private int $resolveCalls = 0;
-
-	public function __construct(
-		private readonly string $resolvedValue = ''
-	) {}
-
-	public static function getName(): string {
-		return 'ciphertestconfigvalueresolver';
-	}
-
-	public function resolve(array|string|int|float|bool|null $config): mixed {
-		$this->resolveCalls++;
-		return $this->resolvedValue;
-	}
-
-	public function getResolveCalls(): int {
-		return $this->resolveCalls;
-	}
-
-	public function getModes(): array { return []; }
-	public function getModeSchema(string $mode): ?array { return null; }
-	public function getModeSchemas(): array { return []; }
-	public function getModeResolverNames(): array { return []; }
-}
+require_once __DIR__ . '/CipherTestConfigValueResolver.php';

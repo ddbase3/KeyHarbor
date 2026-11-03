@@ -302,42 +302,8 @@ final class EncryptionProfileServiceTest extends TestCase {
 	}
 }
 
-final class EncryptionExampleTargetProvider implements IEncryptionTargetProvider {
-	public static function getName(): string { return 'encryptionexampletargetprovider'; }
-	public function getTargets(): array { return [new EncryptionTargetDefinition('example:store', 'Example store')]; }
-}
+require_once __DIR__ . '/EncryptionExampleTargetProvider.php';
 
-final class EncryptionTestSettingsStore implements ISettingsStore {
-	/** @var array<string,array<string,array<string,mixed>>> */
-	private array $data = [];
-	public function get(string $group, string $name, array $default = []): array { return $this->data[$group][$name] ?? $default; }
-	public function set(string $group, string $name, array $settings): void { $this->data[$group][$name] = $settings; }
-	public function has(string $group, string $name): bool { return isset($this->data[$group][$name]); }
-	public function remove(string $group, string $name): void { unset($this->data[$group][$name]); }
-	public function getGroup(string $group): array { return $this->data[$group] ?? []; }
-	public function save(): void {}
-	public function reload(): void {}
-}
+require_once __DIR__ . '/EncryptionTestSettingsStore.php';
 
-final class EncryptionTestClassMap implements IClassMap {
-	/** @var array<string,array<int,object>> */
-	private array $instances;
-	private array $empty = [];
-	/** @param array<string,array<int,object>> $instances */
-	public function __construct(array $instances) { $this->instances = $instances; }
-	public function instantiate(string $class) { return null; }
-	public function instantiateWith(string $class, array $arguments = []) { return null; }
-	public function generate($regenerate = false): void {}
-	public function getApps() { return []; }
-	public function &getInstances(array $criteria = []) { return $this->empty; }
-	public function &getInstancesByInterface($interface) {
-		if (!isset($this->instances[$interface])) { return $this->empty; }
-		return $this->instances[$interface];
-	}
-	public function &getInstancesByAppInterface($app, $interface, $retry = false) { return $this->empty; }
-	public function &getInstanceByAppName($app, $name, $retry = false) { $null = null; return $null; }
-	public function getClassByInterfaceName(string $interface, string $name): ?string { return null; }
-	public function &getInstanceByInterfaceName($interface, $name, $retry = false) { $null = null; return $null; }
-	public function &getInstanceByAppInterfaceName($app, $interface, $name, $retry = false) { $null = null; return $null; }
-	public function getPlugins(): array { return []; }
-}
+require_once __DIR__ . '/EncryptionTestClassMap.php';

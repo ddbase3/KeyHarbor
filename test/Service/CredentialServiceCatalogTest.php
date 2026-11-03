@@ -58,115 +58,12 @@ final class CredentialServiceCatalogTest extends TestCase {
 	}
 }
 
-final class FirstCatalogProvider implements ICredentialServiceProvider {
+require_once __DIR__ . '/FirstCatalogProvider.php';
 
-	public static function getName(): string {
-		return 'firstcatalogprovider';
-	}
+require_once __DIR__ . '/SecondCatalogProvider.php';
 
-	public function getServices(): array {
-		return [
-			new CredentialServiceDefinition('example:write', 'Example write'),
-			new CredentialServiceDefinition('example:read', 'Example read')
-		];
-	}
-}
+require_once __DIR__ . '/DuplicateCatalogProvider.php';
 
-final class SecondCatalogProvider implements ICredentialServiceProvider {
+require_once __DIR__ . '/InvalidCatalogProvider.php';
 
-	public static function getName(): string {
-		return 'secondcatalogprovider';
-	}
-
-	public function getServices(): array {
-		return [
-			new CredentialServiceDefinition('other:ping', 'Other ping')
-		];
-	}
-}
-
-final class DuplicateCatalogProvider implements ICredentialServiceProvider {
-
-	public static function getName(): string {
-		return 'duplicatecatalogprovider';
-	}
-
-	public function getServices(): array {
-		return [
-			new CredentialServiceDefinition('example:read', 'Duplicate example read')
-		];
-	}
-}
-
-final class InvalidCatalogProvider implements ICredentialServiceProvider {
-
-	public static function getName(): string {
-		return 'invalidcatalogprovider';
-	}
-
-	public function getServices(): array {
-		return ['invalid'];
-	}
-}
-
-final class CatalogTestClassMap implements IClassMap {
-
-	/** @var array<int,object> */
-	private array $instances;
-	/** @var array<int,object> */
-	private array $empty = [];
-
-	/** @param array<int,object> $instances */
-	public function __construct(array $instances) {
-		$this->instances = $instances;
-	}
-
-	public function instantiate(string $class) {
-		return null;
-	}
-
-	public function instantiateWith(string $class, array $arguments = []) {
-		return null;
-	}
-
-	public function generate($regenerate = false): void {}
-
-	public function getApps() {
-		return [];
-	}
-
-	public function &getInstances(array $criteria = []) {
-		return $this->empty;
-	}
-
-	public function &getInstancesByInterface($interface) {
-		return $this->instances;
-	}
-
-	public function &getInstancesByAppInterface($app, $interface, $retry = false) {
-		return $this->empty;
-	}
-
-	public function &getInstanceByAppName($app, $name, $retry = false) {
-		$result = null;
-		return $result;
-	}
-
-	public function getClassByInterfaceName(string $interface, string $name): ?string {
-		return null;
-	}
-
-	public function &getInstanceByInterfaceName($interface, $name, $retry = false) {
-		$result = null;
-		return $result;
-	}
-
-	public function &getInstanceByAppInterfaceName($app, $interface, $name, $retry = false) {
-		$result = null;
-		return $result;
-	}
-
-	public function getPlugins() {
-		return [];
-	}
-}
+require_once __DIR__ . '/CatalogTestClassMap.php';

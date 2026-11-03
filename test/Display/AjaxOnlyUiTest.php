@@ -205,20 +205,4 @@ final class AjaxOnlyUiTest extends TestCase {
 }
 
 /** Minimal template fixture: templates are rendered by IMvcView in production. */
-final class AdminTemplateRenderFixture {
-
-	public array $_;
-
-	public function __construct(array $data) { $this->_ = $data; }
-
-	public function render(string $file): string {
-		ob_start();
-		try {
-			include $file;
-			return (string)ob_get_clean();
-		} catch (\Throwable $exception) {
-			ob_end_clean();
-			throw $exception;
-		}
-	}
-}
+require_once __DIR__ . '/AdminTemplateRenderFixture.php';
