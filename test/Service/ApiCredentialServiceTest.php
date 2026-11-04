@@ -8,6 +8,7 @@ use Base3\ConfigValue\Api\IConfigValueResolver;
 use Base3\State\Api\IStateStore;
 use CredentialFoundation\Api\ICredentialServiceProvider;
 use CredentialFoundation\Dto\CredentialAuthenticationResult;
+use CredentialFoundation\Dto\CredentialIdentityResult;
 use CredentialFoundation\Dto\CredentialServiceDefinition;
 use CredentialFoundation\Dto\HmacAuthenticationRequest;
 use KeyHarbor\Api\ICredentialRepository;
@@ -162,6 +163,252 @@ final class ApiCredentialServiceTest extends TestCase {
 		);
 	}
 
+	public function testIdentifyBearerResetsPreviouslyAuthenticatedIdentityOnFailure(): void {
+		[$service, $token] = $this->serviceWithCredential();
+		self::assertTrue($service->identifyBearer($token)->isAuthenticated());
+		self::assertTrue($service->getIdentity()?->isAuthenticated());
+
+		$failure = $service->identifyBearer('malformed');
+		self::assertFalse($failure->isAuthenticated());
+		self::assertSame($failure, $service->getIdentity());
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_INVALID_CREDENTIAL,
+			$service->authorizeService('example:read')->getFailureCode()
+		);
+	}
+
+	public function testResetDiscardsIdentityAndPreventsFurtherServiceAccess(): void {
+		[$service, $token] = $this->serviceWithCredential();
+		self::assertTrue($service->identifyBearer($token)->isAuthenticated());
+
+		$service->reset();
+		self::assertNull($service->getIdentity());
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_INVALID_CREDENTIAL,
+			$service->authorizeService('example:read')->getFailureCode()
+		);
+	}
+
+	public function testRejectsOperationAuthorizationWithoutAuthenticatedIdentity(): void {
+		[$service] = $this->serviceWithCredential();
+
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_INVALID_CREDENTIAL,
+			$service->authorizeOperation('example:read', 'getEntry')->getFailureCode()
+		);
+	}
+
+	public function testUnknownOperationRemainsDeniedForAuthenticatedBearer(): void {
+		[$service, $token] = $this->serviceWithCredential();
+		self::assertTrue($service->identifyBearer($token)->isAuthenticated());
+
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_OPERATION_NOT_FOUND,
+			$service->authorizeOperation('example:read', 'undeclared')->getFailureCode()
+		);
+	}
+
+	public function testHmacRejectsTimestampOutsideMaximumClockSkew(): void {
+		[$service, $token] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = new HmacAuthenticationRequest(
+			$token, 'POST', '/resource', '', time() - 7200,
+			'valid-nonce', str_repeat('a', 64)
+		);
+
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_TIMESTAMP,
+			$service->authenticateHmac($request, 'example:read')->getFailureCode()
+		);
+	}
+
+	public function testHmacRejectsOversizedNonceBeforeSignatureVerification(): void {
+		[$service, $token] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = new HmacAuthenticationRequest(
+			$token, 'POST', '/resource', '', time(),
+			str_repeat('n', 256), str_repeat('a', 64)
+		);
+
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_NONCE,
+			$service->authenticateHmac($request, 'example:read')->getFailureCode()
+		);
+	}
+
+	public function testHmacRejectsIncorrectRequestSignature(): void {
+		[$service, $token] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = new HmacAuthenticationRequest(
+			$token, 'POST', '/resource', '', time(),
+			'valid-nonce', str_repeat('a', 64), 'body'
+		);
+
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_SIGNATURE,
+			$service->authenticateHmac($request, 'example:read')->getFailureCode()
+		);
+	}
+
+	public function testSuccessfulIdentificationStillRequiresNonemptyServiceId(): void {
+		[$service, $token] = $this->serviceWithCredential();
+		self::assertTrue($service->identifyBearer($token)->isAuthenticated());
+
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_SERVICE_NOT_FOUND,
+			$service->authorizeService('  ')->getFailureCode()
+		);
+	}
+
+	public function testValidHmacTimestampWithinDefaultToleranceIsAccepted(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = $this->signedHmacRequest($token, $signer, time() - 240, 'clock-window');
+
+		self::assertTrue($service->identifyHmac($request)->isAuthenticated());
+		self::assertTrue($service->authorizeService('example:read')->isAuthenticated());
+	}
+
+	public function testFutureHmacTimestampOutsideDefaultToleranceIsRejected(): void {
+		[$service, $token] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = new HmacAuthenticationRequest(
+			$token, 'GET', '/resource', '', time() + 3600, 'future-nonce', str_repeat('a', 64)
+		);
+
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_TIMESTAMP,
+			$service->identifyHmac($request)->getFailureCode()
+		);
+		self::assertFalse($service->getIdentity()->isAuthenticated());
+	}
+
+	public function testFreshSignedNoncesAreAcceptedButExactReplayIsRejected(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$timestamp = time();
+		$first = $this->signedHmacRequest($token, $signer, $timestamp, 'nonce-one');
+		$second = $this->signedHmacRequest($token, $signer, $timestamp, 'nonce-two');
+
+		self::assertTrue($service->identifyHmac($first)->isAuthenticated());
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_REPLAY_DETECTED,
+			$service->identifyHmac($first)->getFailureCode()
+		);
+		self::assertTrue($service->identifyHmac($second)->isAuthenticated());
+	}
+
+	public function testInvalidHmacSignatureInvalidatesPreviouslyAuthenticatedIdentity(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$timestamp = time();
+		$valid = $this->signedHmacRequest($token, $signer, $timestamp, 'valid-nonce');
+		$invalid = new HmacAuthenticationRequest(
+			$token, 'GET', '/resource', '', $timestamp, 'another-nonce', str_repeat('f', 64)
+		);
+
+		self::assertTrue($service->identifyHmac($valid)->isAuthenticated());
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_SIGNATURE,
+			$service->identifyHmac($invalid)->getFailureCode()
+		);
+		self::assertFalse($service->getIdentity()->isAuthenticated());
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_INVALID_CREDENTIAL,
+			$service->authorizeOperation('example:read', 'getEntries')->getFailureCode()
+		);
+	}
+
+	public function testHmacIdentityCannotExpandAnAuthenticatedCredentialServiceGrant(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$request = $this->signedHmacRequest($token, $signer, time(), 'grant-boundary');
+
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_SERVICE_NOT_GRANTED,
+			$service->authenticateHmac($request, 'example:write')->getFailureCode()
+		);
+		self::assertTrue($service->getIdentity()->isAuthenticated());
+		self::assertTrue($service->authorizeOperation('example:read', 'getEntries')->isAuthenticated());
+	}
+
+	public function testMissingIdentityNeverOverridesUnknownServiceValidation(): void {
+		[$service] = $this->serviceWithCredential();
+
+		self::assertNull($service->getIdentity());
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_SERVICE_NOT_FOUND,
+			$service->authorizeService('missing:service')->getFailureCode()
+		);
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_SERVICE_NOT_FOUND,
+			$service->authorizeOperation('', 'getEntries')->getFailureCode()
+		);
+		self::assertNull($service->getIdentity());
+	}
+
+	public function testClockSkewConfigurationHasAThirtySecondMinimum(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true, false, 0);
+		self::assertTrue($service->identifyHmac(
+			$this->signedHmacRequest($token, $signer, time() - 15, 'within-minimum')
+		)->isAuthenticated());
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_TIMESTAMP,
+			$service->identifyHmac(
+				$this->signedHmacRequest($token, $signer, time() - 45, 'outside-minimum')
+			)->getFailureCode()
+		);
+	}
+
+	public function testClockSkewConfigurationHasAOneHourMaximum(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true, false, 7200);
+		self::assertTrue($service->identifyHmac(
+			$this->signedHmacRequest($token, $signer, time() - 3450, 'within-maximum')
+		)->isAuthenticated());
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_TIMESTAMP,
+			$service->identifyHmac(
+				$this->signedHmacRequest($token, $signer, time() - 3700, 'outside-maximum')
+			)->getFailureCode()
+		);
+	}
+
+	public function testWrongDeploymentMasterKeyRejectsHmacIdentityWithoutReturningTheSecret(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(
+			['example:read'], null, null, true, false, null, true
+		);
+		$request = $this->signedHmacRequest($token, $signer, time(), 'unreadable-secret');
+		$result = $service->identifyHmac($request);
+		self::assertFalse($result->isAuthenticated());
+		self::assertSame(CredentialIdentityResult::FAILURE_INVALID_CREDENTIAL, $result->getFailureCode());
+		self::assertSame($result, $service->getIdentity());
+		self::assertSame(
+			CredentialAuthenticationResult::FAILURE_INVALID_CREDENTIAL,
+			$service->authorizeService('example:read')->getFailureCode()
+		);
+	}
+
+	public function testInvalidHmacSignatureDoesNotReserveNonceForAValidRequest(): void {
+		[$service, $token, , $signer] = $this->serviceWithCredential(['example:read'], null, null, true);
+		$timestamp = time();
+		$nonce = 'retry-after-invalid-signature';
+		$invalid = new HmacAuthenticationRequest(
+			$token, 'GET', '/resource', '', $timestamp, $nonce, str_repeat('f', 64)
+		);
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_INVALID_SIGNATURE,
+			$service->identifyHmac($invalid)->getFailureCode()
+		);
+		$valid = $this->signedHmacRequest($token, $signer, $timestamp, $nonce);
+		self::assertTrue($service->identifyHmac($valid)->isAuthenticated());
+		self::assertSame(
+			CredentialIdentityResult::FAILURE_REPLAY_DETECTED,
+			$service->identifyHmac($valid)->getFailureCode()
+		);
+	}
+
+	private function signedHmacRequest(string $token, HmacRequestSigner $signer, int $timestamp, string $nonce): HmacAuthenticationRequest {
+		$unsigned = new HmacAuthenticationRequest(
+			$token, 'GET', '/resource', '', $timestamp, $nonce, str_repeat('0', 64)
+		);
+		$secret = (new CredentialTokenService())->parse($token)->getSecret();
+		return new HmacAuthenticationRequest(
+			$token, 'GET', '/resource', '', $timestamp, $nonce, $signer->sign($unsigned, $secret)
+		);
+	}
+
 	/**
 	 * @param array<int,string> $serviceIds
 	 * @return array{0:ApiCredentialService,1:string,2:ApiCredential}
@@ -171,7 +418,9 @@ final class ApiCredentialServiceTest extends TestCase {
 		?int $expiresAt = null,
 		?int $revokedAt = null,
 		bool $hmacEnabled = false,
-		bool $technical = false
+		bool $technical = false,
+		?int $clockSkewSeconds = null,
+		bool $wrongDecryptionKey = false
 	): array {
 		$tokenService = new CredentialTokenService();
 		$generated = $tokenService->generate();
@@ -206,6 +455,16 @@ final class ApiCredentialServiceTest extends TestCase {
 		]));
 
 		$signer = new HmacRequestSigner();
+		$serviceConfiguration = $configuration;
+		if ($clockSkewSeconds !== null) {
+			$serviceConfiguration = $this->createStub(IConfiguration::class);
+			$serviceConfiguration->method('getInt')->willReturn($clockSkewSeconds);
+		}
+		if ($wrongDecryptionKey) {
+			$keyConfiguration = $this->createStub(IConfiguration::class);
+			$keyConfiguration->method('getValue')->willReturn(base64_encode(str_repeat('z', 32)));
+			$cipher = new CredentialSecretCipher($keyConfiguration, new AuthenticationTestConfigValueResolver());
+		}
 		return [
 			new ApiCredentialService(
 				$repository,
@@ -214,7 +473,7 @@ final class ApiCredentialServiceTest extends TestCase {
 				$cipher,
 				$signer,
 				new AuthenticationTestStateStore(),
-				$configuration
+				$serviceConfiguration
 			),
 			$generated->getToken(),
 			$credential,

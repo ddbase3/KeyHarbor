@@ -261,6 +261,233 @@ final class EncryptionProfileServiceTest extends TestCase {
 		$service->getReadKey('aes-256-cbc-legacy-v1', 'key-2026');
 	}
 
+	public function testUnassignedTargetDoesNotExposeEncryptionKeyMaterial(): void {
+		$service = $this->service();
+		self::assertNull($service->getAssignedProfileId('example:store'));
+		self::assertNull($service->getWriteKey('example:store'));
+	}
+
+	public function testEncryptionMethodsAndTargetsAreDiscoveredInStableOrder(): void {
+		$service = $this->service();
+		self::assertSame(['aes-256-cbc-legacy-v1', 'xchacha20poly1305-v1'], $service->getMethodsForAdmin());
+		$targets = $service->listTargetsForAdmin();
+		self::assertCount(1, $targets);
+		self::assertSame('example:store', $targets[0]->getTargetId());
+	}
+
+	public function testAssignmentsAreReturnedSortedByTargetIdentifier(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_targets', 'target-z', ['profile_id' => 'profile-z']);
+		$settings->set('keyharbor_encryption_targets', 'target-a', ['profile_id' => 'profile-a']);
+		self::assertSame([
+			'target-a' => 'profile-a', 'target-z' => 'profile-z'
+		], $this->service($settings)->listAssignmentsForAdmin());
+	}
+
+	public function testStoredInvalidAssignmentDoesNotDefaultToAnUnrestrictedProfile(): void {
+		foreach ([['profile_id' => 'INVALID'], ['profile_id' => 42], ['other' => 'profile-a']] as $invalid) {
+			$settings = new EncryptionTestSettingsStore();
+			$settings->set('keyharbor_encryption_targets', 'example:store', $invalid);
+			try {
+				$this->service($settings)->getAssignedProfileId('example:store');
+				self::fail('Invalid stored assignments must not resolve.');
+			} catch (RuntimeException $exception) {
+				self::assertStringContainsString('Invalid stored encryption assignment', $exception->getMessage());
+			}
+		}
+	}
+
+	public function testListAssignmentsRejectsInvalidPersistedData(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_targets', 'example:store', ['profile_id' => 42]);
+		$this->expectException(\UnexpectedValueException::class);
+		$this->service($settings)->listAssignmentsForAdmin();
+	}
+
+	public function testMissingProfileAssignmentCannotProduceWriteKey(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_targets', 'example:store', ['profile_id' => 'missing-profile']);
+		$this->expectException(RuntimeException::class);
+		$this->expectExceptionMessage('Encryption profile is missing');
+		$this->service($settings)->getWriteKey('example:store');
+	}
+
+	public function testAssignedProfileWithoutActiveKeyCannotProduceWriteKey(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_profiles', 'profile-a', [
+			'key_id' => '', 'method' => 'xchacha20poly1305-v1', 'keys' => []
+		]);
+		$settings->set('keyharbor_encryption_targets', 'example:store', ['profile_id' => 'profile-a']);
+		$this->expectException(RuntimeException::class);
+		$this->expectExceptionMessage('lacks an active key or method');
+		$this->service($settings)->getWriteKey('example:store');
+	}
+
+	public function testDuplicateHistoricalKeyIdsAreRejectedOnRead(): void {
+		$settings = new EncryptionTestSettingsStore();
+		foreach (['profile-a', 'profile-b'] as $id) {
+			$settings->set('keyharbor_encryption_profiles', $id, [
+				'method' => 'xchacha20poly1305-v1', 'key_id' => 'key-2026',
+				'keys' => ['key-2026' => ['mode' => 'env', 'name' => 'EXAMPLE']]
+			]);
+		}
+		$this->expectException(RuntimeException::class);
+		$this->expectExceptionMessage('Duplicate historical encryption key ID');
+		$this->service($settings)->getReadKey('xchacha20poly1305-v1', 'key-2026');
+	}
+
+	public function testUnknownHistoricalKeyIsRejected(): void {
+		$this->expectException(RuntimeException::class);
+		$this->expectExceptionMessage('Historical encryption key is unavailable');
+		$this->service()->getReadKey('xchacha20poly1305-v1', 'key-unknown');
+	}
+
+	public function testInvalidTargetIdentifiersAreRejectedBeforeAssignments(): void {
+		$service = $this->service();
+		foreach (['', 'INVALID', 'bad name', str_repeat('a', 129)] as $targetId) {
+			try {
+				$service->getAssignedProfileId($targetId);
+				self::fail('Invalid target ID must not be accepted.');
+			} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+				self::assertSame('invalid_identifier', $exception->getReason());
+			}
+		}
+	}
+
+	public function testAssigningUnknownTargetIsRejectedWithoutPersistence(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$service = $this->service($settings);
+		$service->saveProfileForAdmin($this->profile());
+		try {
+			$service->assignForAdmin('other:store', 'profile-a');
+			self::fail('Undeclared targets must not be assigned.');
+		} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+			self::assertSame('target_unavailable', $exception->getReason());
+		}
+		self::assertSame([], $settings->getGroup('keyharbor_encryption_targets'));
+	}
+
+	public function testAssigningMissingProfileIsRejectedWithoutPersistence(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$service = $this->service($settings);
+		$this->expectException(RuntimeException::class);
+		$this->expectExceptionMessage('Encryption profile is missing');
+		$service->assignForAdmin('example:store', 'missing-profile');
+	}
+
+	public function testRepeatedAssignmentDoesNotNeedNewConfirmation(): void {
+		$service = $this->service();
+		$service->saveProfileForAdmin($this->profile());
+		$service->assignForAdmin('example:store', 'profile-a');
+		$service->assignForAdmin('example:store', 'profile-a');
+		self::assertSame('profile-a', $service->getAssignedProfileId('example:store'));
+	}
+
+	public function testRemovingExistingAssignmentRequiresConfirmation(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$service = $this->service($settings);
+		$service->saveProfileForAdmin($this->profile());
+		$service->assignForAdmin('example:store', 'profile-a');
+		try {
+			$service->assignForAdmin('example:store', null);
+			self::fail('Assignment removal must be confirmed.');
+		} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+			self::assertSame('assignment_confirmation', $exception->getReason());
+		}
+		self::assertSame('profile-a', $service->getAssignedProfileId('example:store'));
+		$service->assignForAdmin('example:store', null, true);
+		self::assertNull($service->getAssignedProfileId('example:store'));
+	}
+
+	public function testPersistedProfilesAreListedInSortedOrder(): void {
+		$service = $this->service();
+		$first = $this->profile();
+		$first['id'] = 'profile-z';
+		$first['keys'][0]['id'] = 'key-z';
+		$first['key_id'] = 'key-z';
+		$service->saveProfileForAdmin($first);
+		$last = $this->profile();
+		$last['id'] = 'profile-a';
+		$service->saveProfileForAdmin($last);
+		self::assertSame(['profile-a', 'profile-z'], array_column($service->listProfilesForAdmin(), 'id'));
+	}
+
+	public function testInvalidStoredKeySourceRecordsAreNotSerializedToAdmin(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_profiles', 'profile-a', [
+			'label' => 'Broken', 'method' => 'xchacha20poly1305-v1',
+			'key_id' => 'key-a', 'keys' => ['key-a' => 42]
+		]);
+		$this->expectException(\UnexpectedValueException::class);
+		$this->expectExceptionMessage('Invalid encryption key source record');
+		$this->service($settings)->listProfilesForAdmin();
+	}
+
+	public function testSaveProfileRejectsInvalidFieldsWithoutPersistence(): void {
+		$base = $this->profile();
+		$cases = [
+			['id', 'INVALID', 'invalid_identifier'],
+			['label', '', 'profile_fields'],
+			['label', str_repeat('x', 201), 'profile_fields'],
+			['method', 'unknown-crypt', 'unknown_method'],
+			['key_id', false, 'profile_fields'],
+			['keys', ['key-2026' => ['mode' => 'env']], 'keys_list'],
+			['keys', ['invalid'], 'invalid_key_entry'],
+			['keys', [['id' => 'key-2026', 'mode' => 'unknown']], 'unsupported_source'],
+			['key_id', 'key-not-configured', 'active_key_missing'],
+			['keys', [
+				['id' => 'key-2026', 'mode' => 'env', 'name' => 'KEY_2026'],
+				['id' => 'key-2026', 'mode' => 'env', 'name' => 'KEY_2026']
+			], 'duplicate_key_id'],
+			['keys', [['id' => 'key-2026', 'mode' => 'env', 'name' => '']], 'source_fields_required'],
+			['keys', [['id' => 'key-2026', 'mode' => 'file', 'path' => '']], 'source_fields_required'],
+			['keys', [['id' => 'key-2026', 'mode' => 'configuration', 'group' => 'x']], 'source_fields_required']
+		];
+		foreach ($cases as [$field, $value, $reason]) {
+			$settings = new EncryptionTestSettingsStore();
+			$service = $this->service($settings);
+			$invalid = $base;
+			$invalid[$field] = $value;
+			try {
+				$service->saveProfileForAdmin($invalid);
+				self::fail('Invalid profile must not be saved: ' . $field);
+			} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+				self::assertSame($reason, $exception->getReason(), $field);
+			}
+			self::assertSame([], $settings->getGroup('keyharbor_encryption_profiles'));
+		}
+	}
+
+	public function testSavedEncryptionMethodCannotBeChanged(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$service = $this->service($settings);
+		$service->saveProfileForAdmin($this->profile());
+		$modified = $this->profile();
+		$modified['method'] = 'aes-256-cbc-legacy-v1';
+		try {
+			$service->saveProfileForAdmin($modified);
+			self::fail('Existing encryption method must remain immutable.');
+		} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+			self::assertSame('method_immutable', $exception->getReason());
+		}
+		self::assertSame('xchacha20poly1305-v1', $settings->get('keyharbor_encryption_profiles', 'profile-a')['method']);
+	}
+
+	public function testUnknownStoredEncryptionMethodCannotGenerateWriteKey(): void {
+		$settings = new EncryptionTestSettingsStore();
+		$settings->set('keyharbor_encryption_profiles', 'profile-a', [
+			'method' => 'no-such-cipher', 'key_id' => 'key-a',
+			'keys' => ['key-a' => ['mode' => 'env', 'name' => 'KEY']]
+		]);
+		$settings->set('keyharbor_encryption_targets', 'example:store', ['profile_id' => 'profile-a']);
+		try {
+			$this->service($settings)->getWriteKey('example:store');
+			self::fail('Unknown encryption method must fail closed.');
+		} catch (\KeyHarbor\Exception\EncryptionProfileValidationException $exception) {
+			self::assertSame('unknown_method', $exception->getReason());
+		}
+	}
+
 	/** @return array<string,mixed> */
 	private function profile(): array {
 		return [
@@ -272,31 +499,31 @@ final class EncryptionProfileServiceTest extends TestCase {
 
 	private function service(?EncryptionTestSettingsStore $store = null, bool $masterKeyConfigured = true): EncryptionProfileService {
 		$store ??= new EncryptionTestSettingsStore();
-		$config = $this->createMock(IConfiguration::class);
+		$config = $this->createStub(IConfiguration::class);
 		$config->method('getValue')->willReturn($masterKeyConfigured ? base64_encode(str_repeat('m', 32)) : null);
-		$resolver = $this->createMock(IConfigValueResolver::class);
+		$resolver = $this->createStub(IConfigValueResolver::class);
 		$resolver->method('resolve')->willReturn(str_repeat('e', 40));
 		$cipher = new CredentialSecretCipher($config, $resolver);
 		$classMap = new EncryptionTestClassMap([
 			IEncryptionTargetProvider::class => [new EncryptionExampleTargetProvider()],
 			ICrypt::class => [$this->method('xchacha20poly1305-v1'), $this->method('aes-256-cbc-legacy-v1')]
 		]);
-		$identity = $this->createMock(IUsermanager::class);
+		$identity = $this->createStub(IUsermanager::class);
 		$user = new User();
 		$user->id = 10;
 		$identity->method('getUser')->willReturn($user);
-		$authorization = $this->createMock(IAuthorizationService::class);
+		$authorization = $this->createStub(IAuthorizationService::class);
 		$authorization->method('getDefaultAuthority')->willReturn('test');
 		$authorization->method('decide')->willReturn(AuthorizationDecision::allow());
 		$management = new CredentialManagementService(
-			$identity, $authorization, $this->createMock(ICredentialRepository::class),
+			$identity, $authorization, $this->createStub(ICredentialRepository::class),
 			new CredentialTokenService(), new CredentialServiceCatalog($classMap), $cipher
 		);
 		return new EncryptionProfileService($store, $resolver, $classMap, $cipher, $management);
 	}
 
 	private function method(string $name): ICrypt {
-		$crypt = $this->createMock(ICrypt::class);
+		$crypt = $this->createStub(ICrypt::class);
 		$crypt->method('getMethod')->willReturn($name);
 		return $crypt;
 	}

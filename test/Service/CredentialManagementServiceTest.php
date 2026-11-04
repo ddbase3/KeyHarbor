@@ -287,6 +287,275 @@ final class CredentialManagementServiceTest extends TestCase {
 		self::assertTrue($adminService->revokeAsAdmin($credential->getId())->isRevoked());
 	}
 
+	public function testCreatingCredentialRejectsInvalidLabelsWithoutPersistence(): void {
+		[$service, $repository] = $this->createService();
+		foreach (['  ', str_repeat('a', 256), "line\nfeed"] as $label) {
+			try {
+				$service->createForCurrentUser($label, '', 'en', null, ['example:read']);
+				self::fail('Expected invalid label to be rejected.');
+			} catch (InvalidArgumentException $exception) {
+				self::assertStringContainsString('Credential label', $exception->getMessage());
+			}
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
+	public function testCreatingCredentialRejectsUnsupportedAuthenticationModes(): void {
+		[$service, $repository] = $this->createService();
+		foreach (['none', 'bearer+hmac', 'service'] as $mode) {
+			try {
+				$service->createForCurrentUser('Label', '', 'en', null, ['example:read'], $mode);
+				self::fail('Expected unsupported mode to be rejected.');
+			} catch (InvalidArgumentException $exception) {
+				self::assertStringContainsString('authentication mode', $exception->getMessage());
+			}
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
+	public function testCreatingCredentialRejectsInvalidLanguagesAndExpiredTimestamps(): void {
+		[$service, $repository] = $this->createService();
+		foreach (['en US', str_repeat('a', 25)] as $language) {
+			try {
+				$service->createForCurrentUser('Label', '', $language, null, ['example:read']);
+				self::fail('Expected invalid language to be rejected.');
+			} catch (InvalidArgumentException $exception) {
+				self::assertStringContainsString('Notification language', $exception->getMessage());
+			}
+		}
+		try {
+			$service->createForCurrentUser('Label', '', 'en', time() - 60, ['example:read']);
+			self::fail('Expected expired creation to be rejected.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('expiration must be in the future', $exception->getMessage());
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
+	public function testCurrentUserCannotEditRevokedCredential(): void {
+		[$service, $repository] = $this->createService();
+		$credential = $this->credential(['example:read'])->withRevokedAt(time());
+		$repository->insert($credential);
+
+		try {
+			$service->updateForCurrentUser($credential->getId(), 'Changed', '', 'en', null, ['example:read']);
+			self::fail('Expected update after revocation to be rejected.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::REVOKED, $exception->getReason());
+		}
+		self::assertSame($credential, $repository->getById($credential->getId()));
+	}
+
+	public function testCurrentUserCannotRotateRevokedCredential(): void {
+		[$service, $repository] = $this->createService();
+		$credential = $this->credential(['example:read'])->withRevokedAt(time());
+		$repository->insert($credential);
+
+		try {
+			$service->rotateForCurrentUser($credential->getId());
+			self::fail('Expected rotation after revocation to be rejected.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::REVOKED, $exception->getReason());
+		}
+		self::assertSame($credential, $repository->getById($credential->getId()));
+	}
+
+	public function testAdministratorCannotDeleteActiveCredential(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $this->credential(['example:read']);
+		$repository->insert($credential);
+
+		try {
+			$service->deleteAsAdmin($credential->getId());
+			self::fail('Expected active credential deletion to be rejected.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::NOT_REVOKED, $exception->getReason());
+		}
+		self::assertSame($credential, $repository->getById($credential->getId()));
+	}
+
+	public function testAdministratorCannotTreatUserCredentialAsTechnicalCredential(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $this->credential(['example:read']);
+		$repository->insert($credential);
+
+		try {
+			$service->rotateServiceAsAdmin($credential->getId());
+			self::fail('Expected a user credential to be excluded from technical rotation.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::NOT_FOUND, $exception->getReason());
+		}
+		self::assertSame($credential, $repository->getById($credential->getId()));
+	}
+
+	public function testOwningAdministratorCannotUseUserWorkflowOnServiceCredential(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $service->createForService('contourz', 'Service key', '', 'en', null, [
+			'example:read' => ['getEntries']
+		])->getCredential();
+
+		try {
+			$service->rotateForCurrentUser($credential->getId());
+			self::fail('Expected service credential to be excluded from human credential workflow.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::NOT_FOUND, $exception->getReason());
+		}
+		self::assertSame($credential, $repository->getById($credential->getId()));
+	}
+
+	public function testTechnicalCredentialOperationsAreDeduplicatedWithoutGrantExpansion(): void {
+		[$service] = $this->createService(true);
+		$credential = $service->createForService('contourz', 'Service key', '', 'en', null, [
+			'example:read' => ['getEntry', 'getEntries', 'getEntry']
+		])->getCredential();
+
+		self::assertCount(2, $credential->getOperationGrants()['example:read']);
+		self::assertTrue($credential->hasOperation('example:read', 'getEntry'));
+		self::assertTrue($credential->hasOperation('example:read', 'getEntries'));
+		self::assertFalse($credential->hasOperation('example:read', 'deleteEntry'));
+	}
+
+	public function testTechnicalCredentialRejectsEmptyOperationGrantWithoutInsert(): void {
+		[$service, $repository] = $this->createService(true);
+
+		try {
+			$service->createForService('contourz', 'Service key', '', 'en', null, [
+				'example:read' => []
+			]);
+			self::fail('Expected an empty technical operation grant to be rejected.');
+		} catch (InvalidArgumentException $exception) {
+			self::assertStringContainsString('at least one operation', $exception->getMessage());
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
+	public function testAdministratorCannotEditRevokedTechnicalCredential(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $service->createForService('contourz', 'Service key', '', 'en', null, [
+			'example:read' => ['getEntries']
+		])->getCredential();
+		$revoked = $service->revokeAsAdmin($credential->getId());
+
+		try {
+			$service->updateServiceAsAdmin($credential->getId(), 'Changed', '', 'en', null, [
+				'example:read' => ['getEntry']
+			]);
+			self::fail('Expected revoked technical credential editing to be rejected.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::REVOKED, $exception->getReason());
+		}
+		self::assertSame($revoked, $repository->getById($credential->getId()));
+	}
+
+	public function testAdministratorCannotRotateRevokedTechnicalCredential(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $service->createForService('contourz', 'Service key', '', 'en', null, [
+			'example:read' => ['getEntries']
+		])->getCredential();
+		$revoked = $service->revokeAsAdmin($credential->getId());
+
+		try {
+			$service->rotateServiceAsAdmin($credential->getId());
+			self::fail('Expected revoked technical credential rotation to be rejected.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::REVOKED, $exception->getReason());
+		}
+		self::assertSame($revoked, $repository->getById($credential->getId()));
+	}
+
+	public function testChangingExpirationResetsBothNotificationMarkersWithoutChangingTokenIdentity(): void {
+		[$service, $repository] = $this->createService();
+		$original = $this->credential(['example:read']);
+		$repository->insert($original);
+
+		$updated = $service->updateForCurrentUser(
+			$original->getId(), 'Renewed key', '', '', time() + 7200, ['example:read']
+		);
+
+		self::assertSame($original->getId(), $updated->getId());
+		self::assertSame($original->getPublicId(), $updated->getPublicId());
+		self::assertSame($original->getSecretHash(), $updated->getSecretHash());
+		self::assertNull($updated->getWarningNotifiedAt());
+		self::assertNull($updated->getExpiryNotifiedAt());
+		self::assertSame($updated, $repository->getById($original->getId()));
+	}
+
+	public function testKeepingExpirationRetainsBothNotificationMarkers(): void {
+		[$service, $repository] = $this->createService();
+		$original = $this->credential(['example:read']);
+		$repository->insert($original);
+
+		$updated = $service->updateForCurrentUser(
+			$original->getId(), 'Renamed key', '', '', $original->getExpiresAt(), ['example:read']
+		);
+
+		self::assertSame($original->getWarningNotifiedAt(), $updated->getWarningNotifiedAt());
+		self::assertSame($original->getExpiryNotifiedAt(), $updated->getExpiryNotifiedAt());
+		self::assertSame('Renamed key', $updated->getLabel());
+	}
+
+	public function testRemovingAServiceFromAnOwnedCredentialRemovesTheGrant(): void {
+		[$service, $repository] = $this->createService();
+		$original = $this->credential(['example:read', 'example:write']);
+		$repository->insert($original);
+
+		$updated = $service->updateForCurrentUser(
+			$original->getId(), 'Reduced grants', '', '', $original->getExpiresAt(), ['example:read']
+		);
+
+		self::assertSame(['example:read'], $updated->getServiceIds());
+		self::assertTrue($updated->hasService('example:read'));
+		self::assertFalse($updated->hasService('example:write'));
+		self::assertSame($updated, $repository->getById($original->getId()));
+	}
+
+	public function testExpiredServiceCredentialCannotBeRotatedByAdministrator(): void {
+		[$service, $repository] = $this->createService(true);
+		$credential = $service->createForService(
+			'worker', 'Worker', '', '', null, ['example:read' => ['getEntries']]
+		)->getCredential();
+		$expired = $credential->withManagementData(
+			$credential->getLabel(), $credential->getNotificationAddress(),
+			$credential->getNotificationLanguage(), time() - 60,
+			$credential->getServiceIds(), $credential->getOperationGrants()
+		);
+		$repository->update($expired);
+
+		try {
+			$service->rotateServiceAsAdmin($expired->getId());
+			self::fail('Expired technical credentials must not be rotated.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::EXPIRED, $exception->getReason());
+		}
+		self::assertSame($expired, $repository->getById($expired->getId()));
+	}
+
+	public function testAdministratorRevokingUnknownCredentialDoesNotCreateARecord(): void {
+		[$service, $repository] = $this->createService(true);
+
+		try {
+			$service->revokeAsAdmin(str_repeat('f', 32));
+			self::fail('Unknown credentials must not be revoked.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::NOT_FOUND, $exception->getReason());
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
+	public function testAdministratorCannotUpdateAnUnknownServiceCredential(): void {
+		[$service, $repository] = $this->createService(true);
+
+		try {
+			$service->updateServiceAsAdmin(
+				str_repeat('f', 32), 'Missing', '', '', null, ['example:read' => ['getEntries']]
+			);
+			self::fail('Missing technical credentials must not be edited.');
+		} catch (CredentialManagementException $exception) {
+			self::assertSame(CredentialManagementException::NOT_FOUND, $exception->getReason());
+		}
+		self::assertSame([], $repository->listAll());
+	}
+
 	/**
 	 * @return array{0:CredentialManagementService,1:ManagementTestRepository,2:CredentialTokenService}
 	 */
@@ -296,7 +565,7 @@ final class CredentialManagementServiceTest extends TestCase {
 		$catalog = new CredentialServiceCatalog(new ManagementTestClassMap([
 			new ManagementTestProvider()
 		]));
-		$authorization = $this->createMock(IAuthorizationService::class);
+		$authorization = $this->createStub(IAuthorizationService::class);
 		$authorization->method('getDefaultAuthority')->willReturn('ilias');
 		$authorization->method('decide')->willReturn($admin ? AuthorizationDecision::allow() : AuthorizationDecision::deny());
 		$service = new CredentialManagementService(

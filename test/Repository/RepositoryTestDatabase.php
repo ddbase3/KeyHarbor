@@ -17,6 +17,8 @@ final class RepositoryTestDatabase implements IDatabase {
 	public array $singleResponses = [];
 	/** @var array<int,array<int,array<string,mixed>>> */
 	public array $multiResponses = [];
+	/** @var array<int,string> */
+	public array $multiQueries = [];
 	/** @var array<int,mixed> */
 	public array $scalarResponses = [];
 	/** @var array<int,string> */
@@ -72,6 +74,7 @@ final class RepositoryTestDatabase implements IDatabase {
 	}
 
 	public function &multiQuery(string $query): array {
+		$this->multiQueries[] = $query;
 		$result = array_shift($this->multiResponses) ?? [];
 		return $result;
 	}

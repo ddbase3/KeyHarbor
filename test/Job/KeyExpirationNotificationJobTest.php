@@ -94,6 +94,118 @@ final class KeyExpirationNotificationJobTest extends TestCase {
 		self::assertSame(0, $repository->findCalls);
 	}
 
+	public function testJobExposesStablePolicyAndDefaultPriority(): void {
+		$job = $this->job(
+			new NotificationTestRepository([], []),
+			new NotificationTestRenderer(),
+			new NotificationTestMessageService(),
+			new NotificationTestSynchronizationService(),
+			new NotificationTestStateStore(),
+			new NotificationTestLogger()
+		);
+
+		self::assertSame('keyexpirationnotificationjob', $job::getName());
+		self::assertTrue($job->isActive());
+		self::assertSame(1, $job->getPriority());
+		self::assertSame([
+			'policy' => 'intervaljobpolicy',
+			'data' => ['seconds' => 3600, 'id' => 'keyharbor-expiration']
+		], $job->getPolicyDefinition());
+	}
+
+	public function testEmptyRunDoesNotSynchronizeTypesOrQueueNotifications(): void {
+		$repository = new NotificationTestRepository([], []);
+		$messages = new NotificationTestMessageService();
+		$sync = new NotificationTestSynchronizationService();
+		$state = new NotificationTestStateStore();
+		$policy = new NotificationTestPolicy();
+		$job = $this->job($repository, new NotificationTestRenderer(), $messages, $sync, $state, new NotificationTestLogger());
+		$job->setExecutionPolicy($policy);
+
+		self::assertStringContainsString('queued: 0; failed: 0', $job->go());
+		self::assertSame(2, $repository->findCalls);
+		self::assertSame([], $messages->messages);
+		self::assertSame([], $sync->calls);
+		self::assertSame(1, $policy->markCount);
+		self::assertFalse($state->has('locks.keyharbor.expiration-notification'));
+	}
+
+	public function testLanguagesAreDeduplicatedAfterNormalization(): void {
+		$repository = new NotificationTestRepository(
+			[$this->credential('5', ' en ', 'expired@example.test')],
+			[$this->credential('6', 'EN', 'warning@example.test')]
+		);
+		$renderer = new NotificationTestRenderer();
+		$sync = new NotificationTestSynchronizationService();
+		$job = $this->job($repository, $renderer, new NotificationTestMessageService(), $sync, new NotificationTestStateStore(), new NotificationTestLogger());
+		$job->setExecutionPolicy(new NotificationTestPolicy());
+
+		self::assertStringContainsString('queued: 2; failed: 0', $job->go());
+		self::assertCount(2, $sync->calls);
+		self::assertSame(['en', 'en'], array_column($sync->calls, 'language'));
+		self::assertSame(['en', 'en'], array_column($renderer->renders, 'language'));
+	}
+
+	public function testNotificationContextUsesPlainTextAndKnownServiceLabels(): void {
+		$repository = new NotificationTestRepository([$this->credential('7', '  DE-AT  ', 'notify@example.test')], []);
+		$renderer = new NotificationTestRenderer();
+		$job = $this->job($repository, $renderer, new NotificationTestMessageService(), new NotificationTestSynchronizationService(), new NotificationTestStateStore(), new NotificationTestLogger());
+		$job->setExecutionPolicy(new NotificationTestPolicy());
+
+		$job->go();
+		$context = $renderer->renders[0]['context'];
+		self::assertSame('de-at', $renderer->renders[0]['language']);
+		self::assertSame('Demo User', $context['user_name']);
+		self::assertSame('Credential 7', $context['key_label']);
+		self::assertSame('Example Read', $context['service_labels']);
+		self::assertSame('ILIAS / BASE3', $context['system_name']);
+		self::assertSame(str_repeat('7', 20), $context['key_public_id']);
+		self::assertSame('/keymanagementdisplay.html', $context['manage_url']);
+	}
+
+	public function testEmptyNotificationLanguageDefaultsToEnglish(): void {
+		$repository = new NotificationTestRepository([], [$this->credential('8', '', 'notify@example.test')]);
+		$renderer = new NotificationTestRenderer();
+		$sync = new NotificationTestSynchronizationService();
+		$job = $this->job($repository, $renderer, new NotificationTestMessageService(), $sync, new NotificationTestStateStore(), new NotificationTestLogger());
+		$job->setExecutionPolicy(new NotificationTestPolicy());
+
+		$job->go();
+		self::assertSame('en', $renderer->renders[0]['language']);
+		self::assertSame(['en', 'en'], array_column($sync->calls, 'language'));
+	}
+
+	public function testExpiredCredentialWithoutContactDoesNotRecordSentNotification(): void {
+		$repository = new NotificationTestRepository([$this->credential('9', 'en', '')], []);
+		$messages = new NotificationTestMessageService();
+		$logger = new NotificationTestLogger();
+		$job = $this->job($repository, new NotificationTestRenderer(), $messages, new NotificationTestSynchronizationService(), new NotificationTestStateStore(), $logger);
+		$job->setExecutionPolicy(new NotificationTestPolicy());
+
+		self::assertStringContainsString('queued: 0; failed: 1', $job->go());
+		self::assertSame([], $repository->expiryMarks);
+		self::assertSame([], $messages->messages);
+		self::assertCount(1, $logger->warnings);
+		self::assertSame('expired', $logger->warnings[0]['notification_kind']);
+	}
+
+	public function testInvalidRepositoryRowsFailWithoutLeavingExecutionLock(): void {
+		$repository = new NotificationTestRepository(['not-a-credential'], []);
+		$state = new NotificationTestStateStore();
+		$policy = new NotificationTestPolicy();
+		$job = $this->job($repository, new NotificationTestRenderer(), new NotificationTestMessageService(), new NotificationTestSynchronizationService(), $state, new NotificationTestLogger());
+		$job->setExecutionPolicy($policy);
+
+		try {
+			$job->go();
+			self::fail('Expected invalid repository entry to be rejected.');
+		} catch (\RuntimeException $exception) {
+			self::assertStringContainsString('invalid expiration result', $exception->getMessage());
+		}
+		self::assertFalse($state->has('locks.keyharbor.expiration-notification'));
+		self::assertSame(0, $policy->markCount);
+	}
+
 	private function job(
 		NotificationTestRepository $repository,
 		NotificationTestRenderer $renderer,
