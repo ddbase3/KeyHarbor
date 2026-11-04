@@ -23,7 +23,8 @@ final class KeyHarborAuthentication extends AbstractAuth {
 		return 'keyharborauthentication';
 	}
 
-	public function login() {
+	public function login(?array $credentials = null) {
+		if ($credentials !== null) return null;
 		$this->credentialAccess->reset();
 
 		$authorization = $this->getAuthorizationHeader();
