@@ -419,6 +419,10 @@ route parameters) must not become part of the signature. In particular, PHP's
 `QUERY_STRING` may contain rewritten routing parameters and is not used for
 this canonical field.
 
+Request signing and verification use the shared
+`CredentialFoundation\Security\HmacRequestSigner`. KeyHarbor does not
+maintain a separate implementation.
+
 The signature is lowercase hexadecimal HMAC-SHA256 over that canonical string,
 using the secret part of the one-time token. Consumers transmit the complete
 credential token plus `X-BASE3-Timestamp`, `X-BASE3-Nonce` and

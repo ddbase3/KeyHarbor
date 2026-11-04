@@ -15,7 +15,7 @@ use KeyHarbor\Exception\CredentialHmacConfigurationException;
 use KeyHarbor\Model\ApiCredential;
 use KeyHarbor\Security\CredentialSecretCipher;
 use KeyHarbor\Security\CredentialTokenService;
-use KeyHarbor\Security\HmacRequestSigner;
+use CredentialFoundation\Security\HmacRequestSigner;
 
 /**
  * Authenticates credentials and authorizes their service grants.

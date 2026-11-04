@@ -20,7 +20,7 @@ use KeyHarbor\KeyHarborPlugin;
 use KeyHarbor\Repository\DatabaseCredentialRepository;
 use KeyHarbor\Security\CredentialSecretCipher;
 use KeyHarbor\Security\CredentialTokenService;
-use KeyHarbor\Security\HmacRequestSigner;
+use CredentialFoundation\Security\HmacRequestSigner;
 use KeyHarbor\Service\ApiCredentialService;
 use KeyHarbor\Service\CredentialManagementService;
 use KeyHarbor\Service\CredentialServiceCatalog;

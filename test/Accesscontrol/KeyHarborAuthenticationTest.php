@@ -149,7 +149,7 @@ final class KeyHarborAuthenticationTest extends TestCase {
 		$timestamp = 1785163584;
 		$nonce = 'nonce-rewrite';
 		$secret = 'test-secret';
-		$signer = new \KeyHarbor\Security\HmacRequestSigner();
+		$signer = new \CredentialFoundation\Security\HmacRequestSigner();
 		$signature = $signer->sign(new HmacAuthenticationRequest(
 			$token,
 			'POST',

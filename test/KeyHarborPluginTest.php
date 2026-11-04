@@ -11,7 +11,7 @@ use KeyHarbor\Api\ICredentialRepository;
 use KeyHarbor\KeyHarborPlugin;
 use KeyHarbor\Security\CredentialSecretCipher;
 use KeyHarbor\Security\CredentialTokenService;
-use KeyHarbor\Security\HmacRequestSigner;
+use CredentialFoundation\Security\HmacRequestSigner;
 use KeyHarbor\Service\CredentialManagementService;
 use KeyHarbor\Service\CredentialServiceCatalog;
 use KeyHarbor\Service\EncryptionProfileService;
@@ -49,7 +49,7 @@ final class KeyHarborPluginTest extends TestCase {
 		}
 	}
 
-	public function testStatelessFactoryDefinitionsConstructOnlyOwnedServices(): void {
+	public function testStatelessFactoryDefinitionsConstructSharedDependencies(): void {
 		$registrations = [];
 		$container = $this->createStub(IContainer::class);
 		$container->method('set')->willReturnCallback(static function(string $name, mixed $definition, int $flags) use (&$registrations, &$container): IContainer {
