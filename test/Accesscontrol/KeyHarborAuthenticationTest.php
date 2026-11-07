@@ -16,7 +16,8 @@ final class KeyHarborAuthenticationTest extends TestCase {
 		$access = new AuthenticationTestCredentialAccess();
 		$authentication = new KeyHarborAuthentication(
 			new AuthenticationTestRequest(),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
 		self::assertNull($authentication->login());
@@ -32,10 +33,11 @@ final class KeyHarborAuthenticationTest extends TestCase {
 			new AuthenticationTestRequest([
 				'HTTP_AUTHORIZATION' => 'Bearer b3k_public_secret'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame('28038', $authentication->login());
+		self::assertSame('user_28038', $authentication->login());
 		self::assertSame('b3k_public_secret', $access->bearerToken);
 		self::assertSame(0, $access->serviceAuthorizations);
 	}
@@ -50,7 +52,8 @@ final class KeyHarborAuthenticationTest extends TestCase {
 			new AuthenticationTestRequest([
 				'HTTP_AUTHORIZATION' => 'Bearer invalid'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
 		self::assertSame(0, $authentication->login());
@@ -67,7 +70,8 @@ final class KeyHarborAuthenticationTest extends TestCase {
 		);
 		$authentication = new KeyHarborAuthentication(
 			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer b3k_fake_token']),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 		self::assertSame(0, $authentication->login());
 		self::assertSame(0, $access->serviceAuthorizations);
@@ -87,10 +91,11 @@ final class KeyHarborAuthenticationTest extends TestCase {
 				'REQUEST_URI' => '/api/example?mode=write',
 				'QUERY_STRING' => 'name=api&out=example&mode=write'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame(42, $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertInstanceOf(HmacAuthenticationRequest::class, $access->hmacRequest);
 		self::assertSame('POST', $access->hmacRequest?->getMethod());
 		self::assertSame('/api/example', $access->hmacRequest?->getPath());
@@ -114,10 +119,11 @@ final class KeyHarborAuthenticationTest extends TestCase {
 				'REQUEST_URI' => '/entitydatamicroservice.json',
 				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&name=index&out=php'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame(42, $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertInstanceOf(HmacAuthenticationRequest::class, $access->hmacRequest);
 		self::assertSame('/entitydatamicroservice.json', $access->hmacRequest?->getPath());
 		self::assertSame('', $access->hmacRequest?->getQueryString());
@@ -137,10 +143,11 @@ final class KeyHarborAuthenticationTest extends TestCase {
 				'REQUEST_URI' => '/entitydatamicroservice.json?tag=a%2Bb&tag=two&empty=&flag',
 				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&tag=a%2Bb&tag=two&empty=&flag'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame(42, $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertSame('tag=a%2Bb&tag=two&empty=&flag', $access->hmacRequest?->getQueryString());
 	}
 
@@ -172,15 +179,17 @@ final class KeyHarborAuthenticationTest extends TestCase {
 				'REQUEST_URI' => '/entitydatamicroservice.json',
 				'QUERY_STRING' => 'name=entitydatamicroservice&out=json&name=index&out=php'
 			]),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame(42, $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertInstanceOf(HmacAuthenticationRequest::class, $access->hmacRequest);
 		self::assertTrue($signer->verify($access->hmacRequest, $secret));
 	}
 }
 
 require_once __DIR__ . '/AuthenticationTestCredentialAccess.php';
+require_once __DIR__ . '/AuthenticationTestUsermanager.php';
 
 require_once __DIR__ . '/AuthenticationTestRequest.php';

@@ -17,8 +17,8 @@ final class KeyHarborAuthenticationParsingTest extends TestCase {
 		$auth = new KeyHarborAuthentication(new AuthenticationTestRequest([
 			'HTTP_AUTHORIZATION' => '  ',
 			'REDIRECT_HTTP_AUTHORIZATION' => 'Bearer redirected-token'
-		]), $access);
-		self::assertSame(42, $auth->login());
+		]), $access, new AuthenticationTestUsermanager());
+		self::assertSame('user_42', $auth->login());
 		self::assertSame('redirected-token', $access->bearerToken);
 		self::assertSame(1, $access->identifications);
 	}
@@ -27,7 +27,7 @@ final class KeyHarborAuthenticationParsingTest extends TestCase {
 		$access = new AuthenticationTestCredentialAccess(CredentialIdentityResult::success('credential', 42));
 		$auth = new KeyHarborAuthentication(new AuthenticationTestRequest([
 			'HTTP_AUTHORIZATION' => "Bearer abc\ndef"
-		]), $access);
+		]), $access, new AuthenticationTestUsermanager());
 		self::assertSame(0, $auth->login());
 		self::assertSame(0, $access->identifications);
 		self::assertSame(1, $access->resets);
@@ -39,7 +39,7 @@ final class KeyHarborAuthenticationParsingTest extends TestCase {
 			$auth = new KeyHarborAuthentication(new AuthenticationTestRequest([
 				'HTTP_AUTHORIZATION' => 'Bearer valid-token',
 				$header => $header === 'HTTP_X_BASE3_TIMESTAMP' ? '1785163584' : 'nonce-or-signature'
-			]), $access);
+			]), $access, new AuthenticationTestUsermanager());
 			self::assertSame(0, $auth->login(), $header);
 			self::assertNull($access->bearerToken, $header);
 			self::assertSame(0, $access->identifications, $header);
@@ -55,8 +55,8 @@ final class KeyHarborAuthenticationParsingTest extends TestCase {
 			'HTTP_X_BASE3_SIGNATURE' => str_repeat('a', 64),
 			'REQUEST_URI' => '/public/api?name=value%2B1&name=two#fragment',
 			'QUERY_STRING' => 'name=rewritten&out=php'
-		]), $access);
-		self::assertSame(42, $auth->login());
+		]), $access, new AuthenticationTestUsermanager());
+		self::assertSame('user_42', $auth->login());
 		self::assertSame('/public/api', $access->hmacRequest?->getPath());
 		self::assertSame('name=value%2B1&name=two', $access->hmacRequest?->getQueryString());
 	}
@@ -64,3 +64,4 @@ final class KeyHarborAuthenticationParsingTest extends TestCase {
 
 require_once __DIR__ . '/AuthenticationTestRequest.php';
 require_once __DIR__ . '/AuthenticationTestCredentialAccess.php';
+require_once __DIR__ . '/AuthenticationTestUsermanager.php';

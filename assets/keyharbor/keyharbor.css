@@ -796,3 +796,30 @@
 [data-service-operations] .keyharbor-service-option {
 	margin: 6px 0;
 }
+
+/* Service-specific HTTP invocation details use provider-owned metadata. */
+.keyharbor-service-entry {
+	min-width: 0;
+}
+
+.keyharbor-endpoint-details {
+	margin: 2px 10px 12px 34px;
+	font-size: 12px;
+}
+
+.keyharbor-endpoint-details summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.keyharbor-endpoint-example {
+	padding: 10px;
+	margin: 8px 0 0;
+	background: var(--kh-surface-subtle);
+	border: 1px solid var(--kh-border);
+	border-radius: 4px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	user-select: text;
+	font-size: 12px;
+}

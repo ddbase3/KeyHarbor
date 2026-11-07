@@ -12,7 +12,8 @@ final class KeyHarborAuthenticationIdentityBoundaryTest extends TestCase {
 		$access = new AuthenticationTestCredentialAccess(CredentialIdentityResult::success('credential', null));
 		$authentication = new KeyHarborAuthentication(
 			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer valid-token']),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
 		self::assertSame(0, $authentication->login());
@@ -25,7 +26,7 @@ final class KeyHarborAuthenticationIdentityBoundaryTest extends TestCase {
 		$authentication = new KeyHarborAuthentication(new AuthenticationTestRequest([
 			'HTTP_AUTHORIZATION' => 'Basic invalid',
 			'REDIRECT_HTTP_AUTHORIZATION' => 'Bearer valid-token'
-		]), $access);
+		]), $access, new AuthenticationTestUsermanager());
 
 		self::assertSame(0, $authentication->login());
 		self::assertNull($access->bearerToken);
@@ -42,9 +43,9 @@ final class KeyHarborAuthenticationIdentityBoundaryTest extends TestCase {
 			'HTTP_X_BASE3_SIGNATURE' => ' ' . str_repeat('a', 64) . ' ',
 			'REQUEST_METHOD' => 'GET',
 			'REQUEST_URI' => '/api/resource?item=1'
-		]), $access);
+		]), $access, new AuthenticationTestUsermanager());
 
-		self::assertSame('42', $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertNotNull($access->hmacRequest);
 		self::assertSame(1785163584, $access->hmacRequest->getTimestamp());
 		self::assertSame('abc-nonce', $access->hmacRequest->getNonce());
@@ -56,16 +57,39 @@ final class KeyHarborAuthenticationIdentityBoundaryTest extends TestCase {
 		$access = new AuthenticationTestCredentialAccess(CredentialIdentityResult::success('credential', 42));
 		$authentication = new KeyHarborAuthentication(
 			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer valid-token']),
-			$access
+			$access,
+			new AuthenticationTestUsermanager()
 		);
 
-		self::assertSame(42, $authentication->login());
-		self::assertSame(42, $authentication->login());
+		self::assertSame('user_42', $authentication->login());
+		self::assertSame('user_42', $authentication->login());
 		self::assertSame(2, $access->resets);
 		self::assertSame(2, $access->identifications);
 		self::assertSame(0, $access->serviceAuthorizations);
+	}
+
+	public function testNativeIdIsResolvedToCurrentLoginIncludingNumericLogin(): void {
+		$access = new AuthenticationTestCredentialAccess(CredentialIdentityResult::success('credential', '42'));
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer valid-token']),
+			$access,
+			new AuthenticationTestUsermanager(['42' => '007'])
+		);
+		self::assertSame('007', $authentication->login());
+		self::assertSame('42', $access->getIdentity()?->getUserId());
+	}
+
+	public function testDeletedNativeIdIsDeniedWithoutLoginFallback(): void {
+		$access = new AuthenticationTestCredentialAccess(CredentialIdentityResult::success('credential', '42'));
+		$authentication = new KeyHarborAuthentication(
+			new AuthenticationTestRequest(['HTTP_AUTHORIZATION' => 'Bearer valid-token']),
+			$access,
+			new AuthenticationTestUsermanager([])
+		);
+		self::assertSame(0, $authentication->login());
 	}
 }
 
 require_once __DIR__ . '/AuthenticationTestRequest.php';
 require_once __DIR__ . '/AuthenticationTestCredentialAccess.php';
+require_once __DIR__ . '/AuthenticationTestUsermanager.php';

@@ -278,7 +278,7 @@ Detailed public failure responses can reveal credential lifecycle state, so cons
 
 ## Access-control identity
 
-`KeyHarborAuthentication` converts a valid explicit credential into the credential owner's BASE3 user id.
+`KeyHarborAuthentication` verifies the explicit credential's native user ID and performs a fresh native `IUsermanager::getUserById()` lookup to obtain the host authentication login (`User::$userid` in XRM). The stored owner-login snapshot is not trusted for authentication. This adds an existing account-directory read during personal token authentication but no second identity store or credential disclosure. The native ID and login remain distinct; deleted or unresolved accounts are denied.
 
 If an explicit credential is malformed or fails authentication, the authentication returns user id `0`. This prevents a failed API credential from being silently replaced by an unrelated host-session identity when KeyHarbor authentication is active for the request.
 

@@ -34,6 +34,8 @@
 			profile
 		};
 
+		fields.authenticationMode.addEventListener('change', renderEndpointExamples);
+
 		const dialogModule = await import(new URL(root.dataset.dialogUrl, document.baseURI).href);
 		editorContent.hidden = false;
 		tokenContent.hidden = false;
@@ -208,7 +210,7 @@
 			state.services.forEach((service) => {
 				const serviceId = String(service.service_id || '');
 				if(!serviceId) { return; }
-				serviceList.appendChild(serviceOption(serviceId, String(service.label || serviceId), String(service.description || ''), selected.has(serviceId), true));
+				serviceList.appendChild(serviceOption(serviceId, String(service.label || serviceId), String(service.description || ''), selected.has(serviceId), true, service));
 				rendered.add(serviceId);
 			});
 
@@ -220,9 +222,11 @@
 			if(serviceList.children.length === 0) {
 				serviceList.appendChild(textElement('p', t('no_services', 'No credential-protected services are currently available.')));
 			}
+			renderEndpointExamples();
 		}
 
-		function serviceOption(serviceId, label, description, checked, available) {
+		function serviceOption(serviceId, label, description, checked, available, service = null) {
+			const container = element('div', 'keyharbor-service-entry');
 			const option = element('label', 'keyharbor-service-option');
 			if(!available) { option.classList.add('keyharbor-service-option-unavailable'); }
 			const checkbox = document.createElement('input');
@@ -233,7 +237,45 @@
 			option.appendChild(checkbox);
 			option.appendChild(textElement('strong', label));
 			option.appendChild(textElement('small', description || serviceId));
-			return option;
+			container.appendChild(option);
+			const endpoints = service && Array.isArray(service.http_endpoints) ? service.http_endpoints : [];
+			if(endpoints.length > 0) {
+				const details = element('details', 'keyharbor-endpoint-details');
+				details.open = checked;
+				details.appendChild(textElement('summary', strings.endpoint_usage));
+				endpoints.forEach((endpoint, index) => {
+					const sample = textElement('pre', '', 'keyharbor-endpoint-example');
+					sample.dataset.serviceId = serviceId;
+					sample.dataset.endpointIndex = String(index);
+					details.appendChild(sample);
+				});
+				checkbox.addEventListener('change', () => { if(checkbox.checked) { details.open = true; } });
+				container.appendChild(details);
+			}
+			return container;
+		}
+
+		function renderEndpointExamples() {
+			serviceList.querySelectorAll('[data-endpoint-index]').forEach((sample) => {
+				const service = serviceById(sample.dataset.serviceId);
+				const endpoints = service && Array.isArray(service.http_endpoints) ? service.http_endpoints : [];
+				const endpoint = endpoints[Number(sample.dataset.endpointIndex)];
+				if(!endpoint || typeof endpoint.path !== 'string' || typeof endpoint.method !== 'string') { return; }
+				const url = new URL(endpoint.path, window.location.origin);
+				const lines = [endpoint.method.toUpperCase() + ' ' + url.href];
+				if(fields.authenticationMode.value === 'hmac') {
+					lines.push('Authorization: Bearer <KEYHARBOR_TOKEN>');
+					lines.push('X-BASE3-Timestamp: <UNIX_TIMESTAMP>');
+					lines.push('X-BASE3-Nonce: <NONCE>');
+					lines.push('X-BASE3-Signature: <HMAC_SHA256_SIGNATURE>');
+				}
+				else { lines.push('Authorization: Bearer <PERSONAL_TOKEN>'); }
+				if(endpoint.method !== 'GET' && endpoint.method !== 'HEAD') { lines.push('Content-Type: application/json'); }
+				if(endpoint.example_json_body && typeof endpoint.example_json_body === 'object') {
+					lines.push('', JSON.stringify(endpoint.example_json_body, null, 2));
+				}
+				sample.textContent = lines.join('\n');
+			});
 		}
 
 		async function saveEditor() {

@@ -461,28 +461,46 @@ Users may permanently delete only their own revoked credentials. System administ
 
 ## Accesscontrol authentication
 
-`KeyHarbor\Accesscontrol\KeyHarborAuthentication` implements the existing BASE3 `IAuthentication` contract. A project plugin creates the concrete instance and adds it to the `authentications` list used by `SelectedAccesscontrol`.
+`KeyHarbor\Accesscontrol\KeyHarborAuthentication` implements BASE3's existing
+`IAuthentication` contract and receives `IRequest`, `ICredentialAccess` and
+`IUsermanager` through project composition. The authentication does not grant
+an API service; each endpoint must authorize its own declared service.
 
-The project supplies a trusted request-to-service resolver. The authentication remains inactive when the resolver returns `null`. For a protected request it validates bearer or HMAC credentials through `IApiCredentialService` and returns the credential owner id to `SelectedAccesscontrol`.
+Personal credentials store the **native host user primary key** (`User::$id`).
+The XRM `Base3SystemUsermanager` instead expects the current authentication
+identifier to be the exact **login name** (`User::$userid`, the `name` column).
+`KeyHarborAuthentication` therefore verifies the credential and resolves the
+native user through `IUsermanager::getUserById()` before returning the current
+login identifier to `SelectedAccesscontrol`. The native ID must exactly match
+the returned user. A deleted or unresolved user, or an empty login, is denied.
+A login containing only digits is still a login, never implicitly a database ID.
+No stored historical owner-login snapshot is used for authentication.
 
-A missing or invalid credential on a protected request returns user id `0`. This deliberately overrides any host-session identity and prevents a failed API credential from silently falling back to a logged-in browser user.
+A missing credential remains inactive. An invalid explicit credential returns
+`0` so it cannot fall back to a browser session. Verified HMAC service
+credentials never become human sessions. The existing technical HMAC service
+operations and their grants are unchanged.
 
-The expected order is:
+The XRM project composition registers the authentication last:
 
 ```php
-[
-	new Base3IliasAuth(...),
-	new KeyHarborAuthentication(...),
-]
+fn() => new KeyHarborAuthentication(
+    $c->get(IRequest::class),
+    $c->get(ICredentialAccess::class),
+    $c->get(IUsermanager::class)
+)
 ```
 
-The explicit KeyHarbor credential is evaluated last and therefore becomes the current BASE3 user for the request. The usermanager can then apply the normal role, permission and object-access checks for the credential owner.
+## HTTP usage information
 
-## Accesscontrol integration
-
-`KeyHarborAuthentication` identifies bearer and KeyHarbor-HMAC credentials before request handling and returns the credential owner to `SelectedAccesscontrol`. It does not decide which consumer service may run.
-
-Consumer services depend on `CredentialFoundation\Api\ICredentialAccess` and call `authorizeService()` with their own stable service id. This keeps route and plugin knowledge out of the project accesscontrol composition.
+When a service provider declares `CredentialHttpEndpointDefinition` entries,
+KeyHarbor's personal credential editor displays the HTTP method, absolute URL,
+authentication headers, and optional example JSON request from the **owning
+provider's** metadata. These are instructions, not automatically granted routes.
+The current site origin supplies the hostname. The token itself is shown
+only once on issue or rotation; usage examples contain placeholders, not secrets.
+Credentials must still receive the explicit service grant and pass the normal
+application authorization at request time.
 
 ## Documentation
 

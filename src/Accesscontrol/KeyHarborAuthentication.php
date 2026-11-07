@@ -4,19 +4,22 @@ namespace KeyHarbor\Accesscontrol;
 
 use Base3\Accesscontrol\AbstractAuth;
 use Base3\Api\IRequest;
+use Base3\Usermanager\Api\IUsermanager;
 use CredentialFoundation\Api\ICredentialAccess;
 use CredentialFoundation\Dto\CredentialIdentityResult;
 use CredentialFoundation\Dto\HmacAuthenticationRequest;
 use InvalidArgumentException;
 
 /**
- * Resolves a KeyHarbor bearer or HMAC credential into the current BASE3 user id.
+ * Resolves a verified native KeyHarbor user id into the host authentication login.
+ * Native User::$id and the host account login User::$userid are never interchangeable.
  */
 final class KeyHarborAuthentication extends AbstractAuth {
 
 	public function __construct(
 		private readonly IRequest $request,
-		private readonly ICredentialAccess $credentialAccess
+		private readonly ICredentialAccess $credentialAccess,
+		private readonly IUsermanager $usermanager
 	) {}
 
 	public static function getName(): string {
@@ -50,12 +53,19 @@ final class KeyHarborAuthentication extends AbstractAuth {
 		if ($result->getSubject()?->isService() === true) {
 			return 0;
 		}
+		// KeyHarbor's user id is the native User::$id, not the login key
+		// expected by Base3SystemUsermanager for the current request.
 		$userId = $result->getUserId();
 		if ($userId === null || trim((string)$userId) === '') {
 			return 0;
 		}
+		$user = $this->usermanager->getUserById($userId);
+		if ($user === null || (string)$user->id !== (string)$userId ||
+			!is_string($user->userid) || trim($user->userid) === '') {
+			return 0;
+		}
 
-		return $userId;
+		return $user->userid;
 	}
 
 	private function identifyHmac(string $token): CredentialIdentityResult {

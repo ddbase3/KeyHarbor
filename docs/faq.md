@@ -130,7 +130,7 @@ Authentication authorization fails with `service_not_found` if a consumer asks f
 
 KeyHarbor implements both `IApiCredentialService` and `ICredentialAccess`.
 
-For request-level authentication, `KeyHarborAuthentication` can identify a bearer or HMAC credential and establish the credential owner as the current BASE3 user.
+For request-level authentication, `KeyHarborAuthentication` verifies a bearer or HMAC credential and resolves a personal credential's native `User::$id` via `IUsermanager::getUserById()`. For the XRM host it returns the current exact `User::$userid` login expected by `SelectedAccesscontrol`, never the stored primary key or a historic login snapshot. Unresolved accounts are denied. Service credentials never establish a human session.
 
 The consuming service then calls:
 
