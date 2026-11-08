@@ -448,3 +448,19 @@ HTML/JSON entry points check the associated feature. The existing
 credential service remains responsible for owner isolation, secret
 handling, retention and revocation; a visible tab does not grant access to
 other users' credentials.
+
+## Browser cross-origin HTTP service exposure (2026-11-08)
+
+The XRM host can opt in selected HTTPS browser Origins through its existing
+static `IConfiguration`. KeyHarbor does not store these Origin choices as
+per-token permissions, alter service grants, or add a CORS-specific credential
+store. The host's CORS middleware checks only declared HTTP method/path
+metadata, requested header names and Origin. A successful preflight does not
+identify a person, consume a HMAC nonce, read a secret, start a session or
+write credential state. The actual HTTP request remains subject to KeyHarbor
+identity and service/operation checks. Approved browser clients may receive
+already-authorized response data through their own applications; the host
+operator must assess the trust and data-recipient implications of the Origins
+it configures, in addition to any web-server/proxy logging and retention.
+See `docs/http-services-and-browser-cors.md` for the actual configuration and
+security boundaries. This documentation adds no KeyHarbor runtime processing.

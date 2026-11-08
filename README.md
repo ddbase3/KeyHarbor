@@ -653,3 +653,11 @@ audience; other administrative entries default to `administration`. Direct
 HTML/JSON endpoints check their feature before executing operations. The
 credential service's existing owner and subject checks remain in force.
 External demo tabs belong to the demo's own provider plugin.
+
+## HTTP service publication and cross-origin browser integration
+
+The detailed contract and operational reference is available in
+[HTTP service and CORS documentation](docs/http-services-and-browser-cors.md).
+The current XRM project handles CORS at the host HTTP transport boundary,
+using the existing KeyHarbor service catalog. The plugin itself introduces
+no alternate CORS service, authorization engine or credential state store.
