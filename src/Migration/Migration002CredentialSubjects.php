@@ -4,9 +4,11 @@ namespace KeyHarbor\Migration;
 
 use Base3\Database\Api\IDatabase;
 use Base3\Migration\Api\IDatabaseMigration;
+use Base3\Migration\Api\ILegacyDatabaseMigration;
+use Base3\Migration\Exception\MigrationException;
 
 /** Versioned schema extension for credential principals and operation grants. */
-final class Migration002CredentialSubjects implements IDatabaseMigration {
+final class Migration002CredentialSubjects implements IDatabaseMigration, ILegacyDatabaseMigration {
 
 	public function __construct(private readonly IDatabase $database) {}
 
@@ -27,5 +29,9 @@ final class Migration002CredentialSubjects implements IDatabaseMigration {
 		$this->database->nonQuery("ALTER TABLE base3_keyharbor_key ADD COLUMN subject_type VARCHAR(16) NOT NULL DEFAULT 'user', ADD COLUMN subject_id VARCHAR(160) NOT NULL DEFAULT ''");
 		$this->database->nonQuery("UPDATE base3_keyharbor_key SET subject_id=owner_user_id WHERE subject_type='user' AND subject_id=''");
 		$this->database->nonQuery("ALTER TABLE base3_keyharbor_grant ADD COLUMN operations_json TEXT NULL");
+	}
+
+	public function down(): void {
+		throw new MigrationException('Not implemented');
 	}
 }

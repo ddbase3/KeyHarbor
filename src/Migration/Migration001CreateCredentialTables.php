@@ -4,11 +4,13 @@ namespace KeyHarbor\Migration;
 
 use Base3\Database\Api\IDatabase;
 use Base3\Migration\Api\IDatabaseMigration;
+use Base3\Migration\Api\ILegacyDatabaseMigration;
+use Base3\Migration\Exception\MigrationException;
 
 /**
  * Creates the immutable KeyHarbor credential and grant schema.
  */
-final class Migration001CreateCredentialTables implements IDatabaseMigration {
+final class Migration001CreateCredentialTables implements IDatabaseMigration, ILegacyDatabaseMigration {
 
 	public function __construct(
 		private readonly IDatabase $database
@@ -64,5 +66,9 @@ CREATE TABLE base3_keyharbor_grant (
 	KEY idx_base3_keyharbor_grant_service (service_id, credential_id)
 )
 SQL);
+	}
+
+	public function down(): void {
+		throw new MigrationException('Not implemented');
 	}
 }
