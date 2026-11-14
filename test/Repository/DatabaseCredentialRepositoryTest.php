@@ -1,10 +1,25 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Repository;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Database\Api\IDatabase;
-use KeyHarbor\Model\ApiCredential;
-use KeyHarbor\Repository\DatabaseCredentialRepository;
+namespace Base3\KeyHarbor\Test\Repository;
+
+use Base3\CoreFoundation\Database\Api\IDatabase;
+use Base3\KeyHarbor\Model\ApiCredential;
+use Base3\KeyHarbor\Repository\DatabaseCredentialRepository;
 use PHPUnit\Framework\TestCase;
 
 final class DatabaseCredentialRepositoryTest extends TestCase {
@@ -29,7 +44,7 @@ final class DatabaseCredentialRepositoryTest extends TestCase {
 		$credential = new ApiCredential(
 			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', '', 'en',
 			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
-			['example:read'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
+			['example:read'], new \Base3\CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
 			['example:read' => ['getEntries']]
 		);
 		$repo->insert($credential);

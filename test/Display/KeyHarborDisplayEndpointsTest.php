@@ -1,40 +1,55 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Display;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\IAssetResolver;
-use Base3\Api\IMvcView;
-use Base3\Api\IRequest;
-use Base3\Authorization\Api\IAuthorizationService;
-use Base3\Authorization\Dto\AuthorizationDecision;
-use Base3\Authorization\Dto\AuthorizationRequest;
-use Base3\Configuration\Api\IConfiguration;
-use Base3\ConfigValue\Api\IConfigValueResolver;
-use Base3\Crypt\Api\ICrypt;
-use Base3\LinkTarget\Api\ILinkTargetService;
-use Base3\Logger\Api\ILogger;
-use Base3\Usermanager\User;
-use CredentialFoundation\Api\ICredentialServiceProvider;
-use CredentialFoundation\Api\IEncryptionTargetProvider;
-use KeyHarbor\Display\EncryptionProfilesDisplay;
-use KeyHarbor\Display\KeyHarborAdminDisplay;
-use KeyHarbor\Display\KeyHarborServiceAdminDisplay;
-use KeyHarbor\Display\KeyManagementDisplay;
-use KeyHarbor\Security\CredentialSecretCipher;
-use KeyHarbor\Security\CredentialTokenService;
-use KeyHarbor\Service\CredentialManagementService;
-use KeyHarbor\Service\CredentialServiceCatalog;
-use KeyHarbor\Service\EncryptionProfileService;
-use KeyHarbor\SettingsTab\EncryptionprofilesSettingsTab;
-use KeyHarbor\SettingsTab\KeyharboradminSettingsTab;
-use KeyHarbor\SettingsTab\KeyharborserviceadminSettingsTab;
-use KeyHarbor\SettingsTab\KeymanagementSettingsTab;
-use KeyHarbor\Test\Service\EncryptionExampleTargetProvider;
-use KeyHarbor\Test\Service\EncryptionTestClassMap;
-use KeyHarbor\Test\Service\EncryptionTestSettingsStore;
-use KeyHarbor\Test\Service\ManagementTestProvider;
-use KeyHarbor\Test\Service\ManagementTestRepository;
-use KeyHarbor\Test\Service\ManagementTestUsermanager;
+namespace Base3\KeyHarbor\Test\Display;
+
+use Base3\CoreFoundation\Api\IAssetResolver;
+use Base3\CoreFoundation\Api\IMvcView;
+use Base3\CoreFoundation\Api\IRequest;
+use Base3\CoreFoundation\Authorization\Api\IAuthorizationService;
+use Base3\CoreFoundation\Authorization\Dto\AuthorizationDecision;
+use Base3\CoreFoundation\Authorization\Dto\AuthorizationRequest;
+use Base3\CoreFoundation\Configuration\Api\IConfiguration;
+use Base3\CoreFoundation\ConfigValue\Api\IConfigValueResolver;
+use Base3\CoreFoundation\Crypt\Api\ICrypt;
+use Base3\CoreFoundation\LinkTarget\Api\ILinkTargetService;
+use Base3\CoreFoundation\Logger\Api\ILogger;
+use Base3\CoreFoundation\Usermanager\User;
+use Base3\CredentialFoundation\Api\ICredentialServiceProvider;
+use Base3\CredentialFoundation\Api\IEncryptionTargetProvider;
+use Base3\KeyHarbor\Display\EncryptionProfilesDisplay;
+use Base3\KeyHarbor\Display\KeyHarborAdminDisplay;
+use Base3\KeyHarbor\Display\KeyHarborServiceAdminDisplay;
+use Base3\KeyHarbor\Display\KeyManagementDisplay;
+use Base3\KeyHarbor\Security\CredentialSecretCipher;
+use Base3\KeyHarbor\Security\CredentialTokenService;
+use Base3\KeyHarbor\Service\CredentialManagementService;
+use Base3\KeyHarbor\Service\CredentialServiceCatalog;
+use Base3\KeyHarbor\Service\EncryptionProfileService;
+use Base3\KeyHarbor\SettingsTab\EncryptionprofilesSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeyharboradminSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeyharborserviceadminSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeymanagementSettingsTab;
+use Base3\KeyHarbor\Test\Service\EncryptionExampleTargetProvider;
+use Base3\KeyHarbor\Test\Service\EncryptionTestClassMap;
+use Base3\KeyHarbor\Test\Service\EncryptionTestSettingsStore;
+use Base3\KeyHarbor\Test\Service\ManagementTestProvider;
+use Base3\KeyHarbor\Test\Service\ManagementTestRepository;
+use Base3\KeyHarbor\Test\Service\ManagementTestUsermanager;
 use PHPUnit\Framework\TestCase;
 
 final class KeyHarborDisplayEndpointsTest extends TestCase {

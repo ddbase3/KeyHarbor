@@ -1,11 +1,26 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Migration;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Database\Api\IDatabase;
-use Base3\Migration\Api\IDatabaseMigration;
-use Base3\Migration\Api\ILegacyDatabaseMigration;
-use Base3\Migration\Exception\MigrationException;
+namespace Base3\KeyHarbor\Migration;
+
+use Base3\CoreFoundation\Database\Api\IDatabase;
+use Base3\CoreFoundation\Migration\Api\IDatabaseMigration;
+use Base3\CoreFoundation\Migration\Api\ILegacyDatabaseMigration;
+use Base3\CoreFoundation\Migration\Exception\MigrationException;
 
 /**
  * Creates the immutable KeyHarbor credential and grant schema.

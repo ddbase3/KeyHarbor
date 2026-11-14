@@ -1,18 +1,33 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Service;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\IClassMap;
-use Base3\ConfigValue\Api\IConfigValueResolver;
-use Base3\Crypt\Api\ICrypt;
-use Base3\Settings\Api\ISettingsStore;
-use CredentialFoundation\Api\IEncryptionProfileService;
-use CredentialFoundation\Api\IEncryptionTargetProvider;
-use CredentialFoundation\Dto\EncryptionKeyMaterial;
-use CredentialFoundation\Dto\EncryptionTargetDefinition;
+namespace Base3\KeyHarbor\Service;
+
+use Base3\CoreFoundation\Api\IClassMap;
+use Base3\CoreFoundation\ConfigValue\Api\IConfigValueResolver;
+use Base3\CoreFoundation\Crypt\Api\ICrypt;
+use Base3\CoreFoundation\Settings\Api\ISettingsStore;
+use Base3\CredentialFoundation\Api\IEncryptionProfileService;
+use Base3\CredentialFoundation\Api\IEncryptionTargetProvider;
+use Base3\CredentialFoundation\Dto\EncryptionKeyMaterial;
+use Base3\CredentialFoundation\Dto\EncryptionTargetDefinition;
 use InvalidArgumentException;
-use KeyHarbor\Exception\EncryptionProfileValidationException;
-use KeyHarbor\Security\CredentialSecretCipher;
+use Base3\KeyHarbor\Exception\EncryptionProfileValidationException;
+use Base3\KeyHarbor\Security\CredentialSecretCipher;
 use RuntimeException;
 use UnexpectedValueException;
 

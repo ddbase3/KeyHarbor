@@ -32,16 +32,16 @@ KeyHarbor is not a generic reverse proxy, HTTP route publisher, CORS security fi
 
 | Owner | Role | Important invariant |
 | --- | --- | --- |
-| `CredentialFoundation\Api\ICredentialServiceProvider` | Discoverable service descriptors | Service IDs unique across plugins |
-| `KeyHarbor\Service\CredentialServiceCatalog` | Collects service descriptors using `IClassMap` | Duplicate IDs rejected; deterministic ordering |
-| `KeyHarbor\Service\CredentialManagementService` | User-scoped create/edit/rotate/revoke | Owner comes from verified user context, never request input |
-| `KeyHarbor\Display\KeyManagementDisplay` | Personal token editor and one-time token presentation | Existing AJAX UI and ClientStack dialog |
-| `KeyHarbor\Display\KeyHarborAdminDisplay` | Credential administration | Server-side admin authorization required |
-| `KeyHarbor\Accesscontrol\KeyHarborAuthentication` | Identifies the presented Bearer/HMAC credential | Technical subject cannot become a user session |
-| `KeyHarbor\Service\ApiCredentialService` | Credential validation, lifecycle and grant decisions | Separate identity and service/operation decisions |
-| `KeyHarbor\Security\CredentialTokenService` | Generates and parses high-entropy tokens | Secret material never available from a list call |
-| `KeyHarbor\Repository\DatabaseCredentialRepository` | Credential persistence and owner-bound reads | Native owner restrictions at database boundary |
-| `CredentialFoundation\Security\HmacRequestSigner` | Canonical six-line signature format | Exact request bytes and request path matter |
+| `Base3\CredentialFoundation\Api\ICredentialServiceProvider` | Discoverable service descriptors | Service IDs unique across plugins |
+| `Base3\KeyHarbor\Service\CredentialServiceCatalog` | Collects service descriptors using `IClassMap` | Duplicate IDs rejected; deterministic ordering |
+| `Base3\KeyHarbor\Service\CredentialManagementService` | User-scoped create/edit/rotate/revoke | Owner comes from verified user context, never request input |
+| `Base3\KeyHarbor\Display\KeyManagementDisplay` | Personal token editor and one-time token presentation | Existing AJAX UI and ClientStack dialog |
+| `Base3\KeyHarbor\Display\KeyHarborAdminDisplay` | Credential administration | Server-side admin authorization required |
+| `Base3\KeyHarbor\Accesscontrol\KeyHarborAuthentication` | Identifies the presented Bearer/HMAC credential | Technical subject cannot become a user session |
+| `Base3\KeyHarbor\Service\ApiCredentialService` | Credential validation, lifecycle and grant decisions | Separate identity and service/operation decisions |
+| `Base3\KeyHarbor\Security\CredentialTokenService` | Generates and parses high-entropy tokens | Secret material never available from a list call |
+| `Base3\KeyHarbor\Repository\DatabaseCredentialRepository` | Credential persistence and owner-bound reads | Native owner restrictions at database boundary |
+| `Base3\CredentialFoundation\Security\HmacRequestSigner` | Canonical six-line signature format | Exact request bytes and request path matter |
 | Project HTTP middleware | Owns routes, response status, CORS and dispatch | Does not invent a second KeyHarbor grant engine |
 
 An application plugin may expose several services through a single provider; multiple providers from different plugins are supported. Service IDs are global stable identifiers, not dynamic URLs. A label is displayed in the credential UI but is not an authorization key.

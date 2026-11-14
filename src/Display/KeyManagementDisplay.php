@@ -1,24 +1,39 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Display;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Usermanager\Permission;
-use Base3\Authorization\Dto\AuthorizationRequest;
-use Base3\Authorization\Api\IAuthorizationService;
-use Base3\Api\IAssetResolver;
-use Base3\Api\IDisplay;
-use Base3\Api\IMvcView;
-use Base3\Api\IRequest;
-use Base3\LinkTarget\Api\ILinkTargetService;
-use Base3\Logger\Api\ILogger;
-use Base3\Usermanager\User;
-use CredentialFoundation\Dto\CredentialServiceDefinition;
+namespace Base3\KeyHarbor\Display;
+
+use Base3\CoreFoundation\Usermanager\Permission;
+use Base3\CoreFoundation\Authorization\Dto\AuthorizationRequest;
+use Base3\CoreFoundation\Authorization\Api\IAuthorizationService;
+use Base3\CoreFoundation\Api\IAssetResolver;
+use Base3\CoreFoundation\Api\IDisplay;
+use Base3\CoreFoundation\Api\IMvcView;
+use Base3\CoreFoundation\Api\IRequest;
+use Base3\CoreFoundation\LinkTarget\Api\ILinkTargetService;
+use Base3\CoreFoundation\Logger\Api\ILogger;
+use Base3\CoreFoundation\Usermanager\User;
+use Base3\CredentialFoundation\Dto\CredentialServiceDefinition;
 use InvalidArgumentException;
-use KeyHarbor\Dto\IssuedCredential;
-use KeyHarbor\Exception\CredentialHmacConfigurationException;
-use KeyHarbor\Exception\CredentialManagementException;
-use KeyHarbor\Model\ApiCredential;
-use KeyHarbor\Service\CredentialManagementService;
+use Base3\KeyHarbor\Dto\IssuedCredential;
+use Base3\KeyHarbor\Exception\CredentialHmacConfigurationException;
+use Base3\KeyHarbor\Exception\CredentialManagementException;
+use Base3\KeyHarbor\Model\ApiCredential;
+use Base3\KeyHarbor\Service\CredentialManagementService;
 use Throwable;
 
 /**
@@ -47,7 +62,7 @@ final class KeyManagementDisplay implements IDisplay {
 	public function getOutput(string $out = 'html', bool $final = false): string {
 		if (!$this->settingsAuthorization->decide(new AuthorizationRequest(
 			$this->settingsAuthorization->getDefaultAuthority(),
-			Permission::for('feature', \KeyHarbor\SettingsTab\KeymanagementSettingsTab::getName())
+			Permission::for('feature', \Base3\KeyHarbor\SettingsTab\KeymanagementSettingsTab::getName())
 		))->isAllowed()) {
 			http_response_code(403);
 			return '';

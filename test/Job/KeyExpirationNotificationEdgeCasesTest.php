@@ -1,17 +1,32 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Job;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\ISystemService;
-use Base3\Configuration\Api\IConfiguration;
-use Base3\LinkTarget\Api\ILinkTargetService;
-use CredentialFoundation\Dto\CredentialSubject;
-use KeyHarbor\Api\ICredentialRepository;
-use KeyHarbor\Display\KeyHarborAdminDisplay;
-use KeyHarbor\Job\KeyExpirationNotificationJob;
-use KeyHarbor\Model\ApiCredential;
-use KeyHarbor\Service\CredentialServiceCatalog;
-use MessagingFoundation\Api\IMessageRenderer;
+namespace Base3\KeyHarbor\Test\Job;
+
+use Base3\CoreFoundation\Api\ISystemService;
+use Base3\CoreFoundation\Configuration\Api\IConfiguration;
+use Base3\CoreFoundation\LinkTarget\Api\ILinkTargetService;
+use Base3\CredentialFoundation\Dto\CredentialSubject;
+use Base3\KeyHarbor\Api\ICredentialRepository;
+use Base3\KeyHarbor\Display\KeyHarborAdminDisplay;
+use Base3\KeyHarbor\Job\KeyExpirationNotificationJob;
+use Base3\KeyHarbor\Model\ApiCredential;
+use Base3\KeyHarbor\Service\CredentialServiceCatalog;
+use Base3\MessagingFoundation\Api\IMessageRenderer;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

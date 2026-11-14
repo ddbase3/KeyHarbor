@@ -1,9 +1,24 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Model;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
+
+namespace Base3\KeyHarbor\Test\Model;
 
 use InvalidArgumentException;
-use KeyHarbor\Model\ApiCredential;
+use Base3\KeyHarbor\Model\ApiCredential;
 use PHPUnit\Framework\TestCase;
 
 final class ApiCredentialTest extends TestCase {
@@ -45,7 +60,7 @@ final class ApiCredentialTest extends TestCase {
 		$credential = new ApiCredential(
 			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', 'admin@example.test', 'en',
 			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
-			['memora:entries'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
+			['memora:entries'], new \Base3\CredentialFoundation\Dto\CredentialSubject('service', 'contourz'),
 			['memora:entries' => ['getEntries']]
 		);
 		self::assertSame('contourz', $credential->getSubject()->getId());
@@ -64,7 +79,7 @@ final class ApiCredentialTest extends TestCase {
 		new ApiCredential(
 			str_repeat('a', 32), str_repeat('b', 20), '42', 'admin', 'Admin', '', 'en',
 			'Contourz', str_repeat('c', 64), true, 'encrypted', 'nonce', 1000, null, null, null, null,
-			['memora:entries'], new \CredentialFoundation\Dto\CredentialSubject('service', 'contourz'), []
+			['memora:entries'], new \Base3\CredentialFoundation\Dto\CredentialSubject('service', 'contourz'), []
 		);
 	}
 

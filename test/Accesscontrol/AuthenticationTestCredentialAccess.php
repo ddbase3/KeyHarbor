@@ -1,13 +1,28 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Accesscontrol;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\IRequest;
-use CredentialFoundation\Api\ICredentialAccess;
-use CredentialFoundation\Dto\CredentialAuthenticationResult;
-use CredentialFoundation\Dto\CredentialIdentityResult;
-use CredentialFoundation\Dto\HmacAuthenticationRequest;
-use KeyHarbor\Accesscontrol\KeyHarborAuthentication;
+namespace Base3\KeyHarbor\Test\Accesscontrol;
+
+use Base3\CoreFoundation\Api\IRequest;
+use Base3\CredentialFoundation\Api\ICredentialAccess;
+use Base3\CredentialFoundation\Dto\CredentialAuthenticationResult;
+use Base3\CredentialFoundation\Dto\CredentialIdentityResult;
+use Base3\CredentialFoundation\Dto\HmacAuthenticationRequest;
+use Base3\KeyHarbor\Accesscontrol\KeyHarborAuthentication;
 use PHPUnit\Framework\TestCase;
 
 final class AuthenticationTestCredentialAccess implements ICredentialAccess {

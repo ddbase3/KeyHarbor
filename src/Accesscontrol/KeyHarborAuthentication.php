@@ -1,13 +1,28 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Accesscontrol;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Accesscontrol\AbstractAuth;
-use Base3\Api\IRequest;
-use Base3\Usermanager\Api\IUsermanager;
-use CredentialFoundation\Api\ICredentialAccess;
-use CredentialFoundation\Dto\CredentialIdentityResult;
-use CredentialFoundation\Dto\HmacAuthenticationRequest;
+namespace Base3\KeyHarbor\Accesscontrol;
+
+use Base3\CoreFoundation\Accesscontrol\AbstractAuth;
+use Base3\CoreFoundation\Api\IRequest;
+use Base3\CoreFoundation\Usermanager\Api\IUsermanager;
+use Base3\CredentialFoundation\Api\ICredentialAccess;
+use Base3\CredentialFoundation\Dto\CredentialIdentityResult;
+use Base3\CredentialFoundation\Dto\HmacAuthenticationRequest;
 use InvalidArgumentException;
 
 /**

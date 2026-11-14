@@ -1,25 +1,40 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Job;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\ISystemService;
-use Base3\Configuration\Api\IConfiguration;
-use Base3\LinkTarget\Api\ILinkTargetService;
-use Base3\Logger\Api\ILogger;
-use Base3\State\Api\IStateStore;
-use Base3\Worker\Api\IPolicyControlledJob;
-use Base3\Worker\Policy\PolicyControlledJobTrait;
-use KeyHarbor\Api\ICredentialRepository;
-use KeyHarbor\Display\KeyManagementDisplay;
-use KeyHarbor\Display\KeyHarborAdminDisplay;
-use KeyHarbor\Message\KeyExpiredMessageTypeProvider;
-use KeyHarbor\Message\KeyExpiringMessageTypeProvider;
-use KeyHarbor\Model\ApiCredential;
-use KeyHarbor\Service\CredentialServiceCatalog;
-use MessagingFoundation\Api\IMessageRenderer;
-use MessagingFoundation\Api\IMessageService;
-use MessagingFoundation\Api\IMessageTypeSynchronizationService;
-use MessagingFoundation\Dto\MessageAddress;
+namespace Base3\KeyHarbor\Job;
+
+use Base3\CoreFoundation\Api\ISystemService;
+use Base3\CoreFoundation\Configuration\Api\IConfiguration;
+use Base3\CoreFoundation\LinkTarget\Api\ILinkTargetService;
+use Base3\CoreFoundation\Logger\Api\ILogger;
+use Base3\CoreFoundation\State\Api\IStateStore;
+use Base3\CoreFoundation\Worker\Api\IPolicyControlledJob;
+use Base3\CoreFoundation\Worker\Policy\PolicyControlledJobTrait;
+use Base3\KeyHarbor\Api\ICredentialRepository;
+use Base3\KeyHarbor\Display\KeyManagementDisplay;
+use Base3\KeyHarbor\Display\KeyHarborAdminDisplay;
+use Base3\KeyHarbor\Message\KeyExpiredMessageTypeProvider;
+use Base3\KeyHarbor\Message\KeyExpiringMessageTypeProvider;
+use Base3\KeyHarbor\Model\ApiCredential;
+use Base3\KeyHarbor\Service\CredentialServiceCatalog;
+use Base3\MessagingFoundation\Api\IMessageRenderer;
+use Base3\MessagingFoundation\Api\IMessageService;
+use Base3\MessagingFoundation\Api\IMessageTypeSynchronizationService;
+use Base3\MessagingFoundation\Dto\MessageAddress;
 use RuntimeException;
 use Throwable;
 

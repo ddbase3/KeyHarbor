@@ -1,13 +1,28 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\Migration;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use KeyHarbor\Migration\KeyHarborMigrationProvider;
-use KeyHarbor\Migration\Migration001CreateCredentialTables;
-use KeyHarbor\Migration\Migration002CredentialSubjects;
-use KeyHarbor\Migration\Migration003ResourceConstraints;
-use KeyHarbor\Repository\DatabaseCredentialRepository;
-use KeyHarbor\Test\Service\ManagementTestRepository;
+namespace Base3\KeyHarbor\Test\Migration;
+
+use Base3\KeyHarbor\Migration\KeyHarborMigrationProvider;
+use Base3\KeyHarbor\Migration\Migration001CreateCredentialTables;
+use Base3\KeyHarbor\Migration\Migration002CredentialSubjects;
+use Base3\KeyHarbor\Migration\Migration003ResourceConstraints;
+use Base3\KeyHarbor\Repository\DatabaseCredentialRepository;
+use Base3\KeyHarbor\Test\Service\ManagementTestRepository;
 use PHPUnit\Framework\TestCase;
 
 final class ResourceConstraintsMigrationTest extends TestCase {

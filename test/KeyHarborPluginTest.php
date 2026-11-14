@@ -1,20 +1,35 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\IContainer;
-use CredentialFoundation\Api\IApiCredentialService;
-use CredentialFoundation\Api\ICredentialAccess;
-use CredentialFoundation\Api\ICredentialOperationAccess;
-use CredentialFoundation\Api\IEncryptionProfileService;
-use KeyHarbor\Api\ICredentialRepository;
-use KeyHarbor\KeyHarborPlugin;
-use KeyHarbor\Security\CredentialSecretCipher;
-use KeyHarbor\Security\CredentialTokenService;
-use CredentialFoundation\Security\HmacRequestSigner;
-use KeyHarbor\Service\CredentialManagementService;
-use KeyHarbor\Service\CredentialServiceCatalog;
-use KeyHarbor\Service\EncryptionProfileService;
+namespace Base3\KeyHarbor\Test;
+
+use Base3\CoreFoundation\Api\IContainer;
+use Base3\CredentialFoundation\Api\IApiCredentialService;
+use Base3\CredentialFoundation\Api\ICredentialAccess;
+use Base3\CredentialFoundation\Api\ICredentialOperationAccess;
+use Base3\CredentialFoundation\Api\IEncryptionProfileService;
+use Base3\KeyHarbor\Api\ICredentialRepository;
+use Base3\KeyHarbor\KeyHarborPlugin;
+use Base3\KeyHarbor\Security\CredentialSecretCipher;
+use Base3\KeyHarbor\Security\CredentialTokenService;
+use Base3\CredentialFoundation\Security\HmacRequestSigner;
+use Base3\KeyHarbor\Service\CredentialManagementService;
+use Base3\KeyHarbor\Service\CredentialServiceCatalog;
+use Base3\KeyHarbor\Service\EncryptionProfileService;
 use PHPUnit\Framework\TestCase;
 
 final class KeyHarborPluginTest extends TestCase {

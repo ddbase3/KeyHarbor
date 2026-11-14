@@ -1,11 +1,26 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Security;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Configuration\Api\IConfiguration;
-use Base3\ConfigValue\Api\IConfigValueResolver;
-use KeyHarbor\Dto\EncryptedCredentialSecret;
-use KeyHarbor\Exception\CredentialHmacConfigurationException;
+namespace Base3\KeyHarbor\Security;
+
+use Base3\CoreFoundation\Configuration\Api\IConfiguration;
+use Base3\CoreFoundation\ConfigValue\Api\IConfigValueResolver;
+use Base3\KeyHarbor\Dto\EncryptedCredentialSecret;
+use Base3\KeyHarbor\Exception\CredentialHmacConfigurationException;
 use Throwable;
 
 /**

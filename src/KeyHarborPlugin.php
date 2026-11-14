@@ -1,30 +1,45 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Api\IClassMap;
-use Base3\Api\IContainer;
-use Base3\Api\IPlugin;
-use Base3\Configuration\Api\IConfiguration;
-use Base3\ConfigValue\Api\IConfigValueResolver;
-use Base3\Database\Api\IDatabase;
-use Base3\State\Api\IStateStore;
-use Base3\Settings\Api\ISettingsStore;
-use Base3\Usermanager\Api\IUsermanager;
-use Base3\Authorization\Api\IAuthorizationService;
-use CredentialFoundation\Api\IApiCredentialService;
-use CredentialFoundation\Api\IEncryptionProfileService;
-use CredentialFoundation\Api\ICredentialAccess;
-use CredentialFoundation\Api\ICredentialOperationAccess;
-use KeyHarbor\Api\ICredentialRepository;
-use KeyHarbor\Repository\DatabaseCredentialRepository;
-use KeyHarbor\Security\CredentialSecretCipher;
-use KeyHarbor\Security\CredentialTokenService;
-use CredentialFoundation\Security\HmacRequestSigner;
-use KeyHarbor\Service\ApiCredentialService;
-use KeyHarbor\Service\CredentialManagementService;
-use KeyHarbor\Service\CredentialServiceCatalog;
-use KeyHarbor\Service\EncryptionProfileService;
+namespace Base3\KeyHarbor;
+
+use Base3\CoreFoundation\Api\IClassMap;
+use Base3\CoreFoundation\Api\IContainer;
+use Base3\CoreFoundation\Api\IPlugin;
+use Base3\CoreFoundation\Configuration\Api\IConfiguration;
+use Base3\CoreFoundation\ConfigValue\Api\IConfigValueResolver;
+use Base3\CoreFoundation\Database\Api\IDatabase;
+use Base3\CoreFoundation\State\Api\IStateStore;
+use Base3\CoreFoundation\Settings\Api\ISettingsStore;
+use Base3\CoreFoundation\Usermanager\Api\IUsermanager;
+use Base3\CoreFoundation\Authorization\Api\IAuthorizationService;
+use Base3\CredentialFoundation\Api\IApiCredentialService;
+use Base3\CredentialFoundation\Api\IEncryptionProfileService;
+use Base3\CredentialFoundation\Api\ICredentialAccess;
+use Base3\CredentialFoundation\Api\ICredentialOperationAccess;
+use Base3\KeyHarbor\Api\ICredentialRepository;
+use Base3\KeyHarbor\Repository\DatabaseCredentialRepository;
+use Base3\KeyHarbor\Security\CredentialSecretCipher;
+use Base3\KeyHarbor\Security\CredentialTokenService;
+use Base3\CredentialFoundation\Security\HmacRequestSigner;
+use Base3\KeyHarbor\Service\ApiCredentialService;
+use Base3\KeyHarbor\Service\CredentialManagementService;
+use Base3\KeyHarbor\Service\CredentialServiceCatalog;
+use Base3\KeyHarbor\Service\EncryptionProfileService;
 
 final class KeyHarborPlugin implements IPlugin {
 

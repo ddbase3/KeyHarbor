@@ -91,7 +91,7 @@ For an HMAC-authenticated request, KeyHarbor processes:
 - HMAC signature header
 - raw request body
 
-The raw body is read so KeyHarbor can calculate its SHA-256 digest for canonical request verification. Signing and verification use the stateless `CredentialFoundation\Security\HmacRequestSigner` without additional storage, logging or recipients.
+The raw body is read so KeyHarbor can calculate its SHA-256 digest for canonical request verification. Signing and verification use the stateless `Base3\CredentialFoundation\Security\HmacRequestSigner` without additional storage, logging or recipients.
 
 These values are held for request processing. The authentication code does not persist the full token, signature, raw nonce, query string, or body to the credential database.
 

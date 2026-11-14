@@ -420,7 +420,7 @@ route parameters) must not become part of the signature. In particular, PHP's
 this canonical field.
 
 Request signing and verification use the shared
-`CredentialFoundation\Security\HmacRequestSigner`. KeyHarbor does not
+`Base3\CredentialFoundation\Security\HmacRequestSigner`. KeyHarbor does not
 maintain a separate implementation.
 
 The signature is lowercase hexadecimal HMAC-SHA256 over that canonical string,
@@ -461,7 +461,7 @@ Users may permanently delete only their own revoked credentials. System administ
 
 ## Accesscontrol authentication
 
-`KeyHarbor\Accesscontrol\KeyHarborAuthentication` implements BASE3's existing
+`Base3\KeyHarbor\Accesscontrol\KeyHarborAuthentication` implements BASE3's existing
 `IAuthentication` contract and receives `IRequest`, `ICredentialAccess` and
 `IUsermanager` through project composition. The authentication does not grant
 an API service; each endpoint must authorize its own declared service.
@@ -516,7 +516,7 @@ API credential responsibilities and user interfaces. In the supplied BASE3/ILIAS
 Lab project configuration the new page appears as a single additional subtab
 under Credentials. No new navigation subsystem is used.
 
-`EncryptionProfileService` implements `CredentialFoundation\Api\IEncryptionProfileService`
+`EncryptionProfileService` implements `Base3\CredentialFoundation\Api\IEncryptionProfileService`
 from CredentialFoundation and is registered in the KeyHarbor plugin through DI.
 All profile and assignment changes are authorized as `system/admin` operations
 and require AJAX JSON POST in the administration display. Providers are

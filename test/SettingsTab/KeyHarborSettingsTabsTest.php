@@ -1,14 +1,29 @@
 <?php declare(strict_types=1);
 
-namespace KeyHarbor\Test\SettingsTab;
+/***********************************************************************
+ * This file is part of KeyHarbor for BASE3 Framework.
+ *
+ * KeyHarbor manages durable API credentials for BASE3 applications.
+ * It provides secure credential lifecycle and encryption profiles.
+ * Authorization and credential subjects follow existing shared contracts.
+ *
+ * Developed by Daniel Dahme
+ * Licensed under GPL-3.0
+ * https://www.gnu.org/licenses/gpl-3.0.en.html
+ *
+ * https://base3.de
+ * https://github.com/ddbase3/KeyHarbor
+ **********************************************************************/
 
-use Base3\Authorization\Api\IAuthorizationService;
-use Base3\Translation\Api\ITranslation;
-use KeyHarbor\SettingsTab\CredentialsSettingsTab;
-use KeyHarbor\SettingsTab\EncryptionprofilesSettingsTab;
-use KeyHarbor\SettingsTab\KeyharboradminSettingsTab;
-use KeyHarbor\SettingsTab\KeyharborserviceadminSettingsTab;
-use KeyHarbor\SettingsTab\KeymanagementSettingsTab;
+namespace Base3\KeyHarbor\Test\SettingsTab;
+
+use Base3\CoreFoundation\Authorization\Api\IAuthorizationService;
+use Base3\CoreFoundation\Translation\Api\ITranslation;
+use Base3\KeyHarbor\SettingsTab\CredentialsSettingsTab;
+use Base3\KeyHarbor\SettingsTab\EncryptionprofilesSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeyharboradminSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeyharborserviceadminSettingsTab;
+use Base3\KeyHarbor\SettingsTab\KeymanagementSettingsTab;
 use PHPUnit\Framework\TestCase;
 
 final class KeyHarborSettingsTabsTest extends TestCase {
